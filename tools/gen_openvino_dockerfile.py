@@ -61,7 +61,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /workspace
 
 ARG OPENVINO_VERSION
-ENV INTEL_OPENVINO_DIR /opt/intel/openvino_${OPENVINO_VERSION}.110
+ENV INTEL_OPENVINO_DIR /opt/intel/openvino_${OPENVINO_VERSION}
 ENV LD_LIBRARY_PATH $INTEL_OPENVINO_DIR/deployment_tools/inference_engine/lib/intel64:$INTEL_OPENVINO_DIR/deployment_tools/ngraph/lib:$INTEL_OPENVINO_DIR/deployment_tools/inference_engine/external/tbb/lib:/usr/local/openblas/lib:$LD_LIBRARY_PATH
 ENV PYTHONPATH $INTEL_OPENVINO_DIR/tools:$PYTHONPATH
 ENV IE_PLUGINS_PATH $INTEL_OPENVINO_DIR/deployment_tools/inference_engine/lib/intel64
@@ -71,7 +71,7 @@ RUN wget https://apt.repos.intel.com/openvino/2021/GPG-PUB-KEY-INTEL-OPENVINO-20
     cd /etc/apt/sources.list.d && \
     echo "deb https://apt.repos.intel.com/openvino/2021 all main">intel-openvino-2021.list && \
     apt update && \
-    apt install -y intel-openvino-dev-ubuntu20-${OPENVINO_VERSION}.110
+    apt install -y intel-openvino-dev-ubuntu20-${OPENVINO_VERSION}
 # && \
 #    cd ${INTEL_OPENVINO_DIR}/install_dependencies && ./install_openvino_dependencies.sh
 
@@ -89,25 +89,25 @@ RUN wget ${INTEL_COMPUTE_RUNTIME_URL}/intel-gmmlib_19.3.2_amd64.deb && \
 WORKDIR /opt/openvino
 
 RUN mkdir -p /opt/openvino/lib && \
-    cp -r /opt/intel/openvino_${OPENVINO_VERSION}.110/licensing \
+    cp -r /opt/intel/openvino_${OPENVINO_VERSION}/licensing \
           /opt/openvino/LICENSE.openvino && \
-    cp /opt/intel/openvino_${OPENVINO_VERSION}.110/deployment_tools/inference_engine/lib/intel64/libinference_engine.so \
+    cp /opt/intel/openvino_${OPENVINO_VERSION}/deployment_tools/inference_engine/lib/intel64/libinference_engine.so \
        /opt/openvino/lib && \
-    cp /opt/intel/openvino_${OPENVINO_VERSION}.110/deployment_tools/inference_engine/lib/intel64/libinference_engine_transformations.so \
+    cp /opt/intel/openvino_${OPENVINO_VERSION}/deployment_tools/inference_engine/lib/intel64/libinference_engine_transformations.so \
        /opt/openvino/lib && \
-    cp /opt/intel/openvino_${OPENVINO_VERSION}.110/deployment_tools/ngraph/lib/libngraph.so \
+    cp /opt/intel/openvino_${OPENVINO_VERSION}/deployment_tools/ngraph/lib/libngraph.so \
        /opt/openvino/lib && \
-    cp /opt/intel/openvino_${OPENVINO_VERSION}.110/deployment_tools/inference_engine/external/tbb/lib/libtbb.so.2 \
+    cp /opt/intel/openvino_${OPENVINO_VERSION}/deployment_tools/inference_engine/external/tbb/lib/libtbb.so.2 \
        /opt/openvino/lib && \
-    cp /opt/intel/openvino_${OPENVINO_VERSION}.110/deployment_tools/inference_engine/external/tbb/lib/libtbbmalloc.so.2 \
+    cp /opt/intel/openvino_${OPENVINO_VERSION}/deployment_tools/inference_engine/external/tbb/lib/libtbbmalloc.so.2 \
        /opt/openvino/lib && \
-    cp /opt/intel/openvino_${OPENVINO_VERSION}.110/deployment_tools/inference_engine/lib/intel64/libMKLDNNPlugin.so \
+    cp /opt/intel/openvino_${OPENVINO_VERSION}/deployment_tools/inference_engine/lib/intel64/libMKLDNNPlugin.so \
        /opt/openvino/lib && \
-    cp /opt/intel/openvino_${OPENVINO_VERSION}.110/deployment_tools/inference_engine/lib/intel64/libinference_engine_lp_transformations.so \
+    cp /opt/intel/openvino_${OPENVINO_VERSION}/deployment_tools/inference_engine/lib/intel64/libinference_engine_lp_transformations.so \
        /opt/openvino/lib && \
-    cp /opt/intel/openvino_${OPENVINO_VERSION}.110/deployment_tools/inference_engine/lib/intel64/libinference_engine_ir_reader.so \
+    cp /opt/intel/openvino_${OPENVINO_VERSION}/deployment_tools/inference_engine/lib/intel64/libinference_engine_ir_reader.so \
        /opt/openvino/lib && \
-    cp /opt/intel/openvino_${OPENVINO_VERSION}.110/deployment_tools/inference_engine/lib/intel64/libinference_engine_onnx_reader.so \
+    cp /opt/intel/openvino_${OPENVINO_VERSION}/deployment_tools/inference_engine/lib/intel64/libinference_engine_onnx_reader.so \
        /opt/openvino/lib && \
     (cd /opt/openvino/lib && \
      chmod a-x * && \
