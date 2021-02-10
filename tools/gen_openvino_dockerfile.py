@@ -96,8 +96,6 @@ RUN mkdir -p /opt/openvino/include && \
 RUN mkdir -p /opt/openvino/lib && \
     cp -r /opt/intel/openvino_${OPENVINO_VERSION}/licensing \
           /opt/openvino/LICENSE.openvino && \
-    cp /opt/intel/openvino_${OPENVINO_VERSION}/deployment_tools/inference_engine/lib/intel64/plugins.xml \
-       /opt/openvino/lib && \
     cp /opt/intel/openvino_${OPENVINO_VERSION}/deployment_tools/inference_engine/lib/intel64/libinference_engine.so \
        /opt/openvino/lib && \
     cp /opt/intel/openvino_${OPENVINO_VERSION}/deployment_tools/inference_engine/lib/intel64/libinference_engine_legacy.so \

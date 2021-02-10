@@ -156,6 +156,7 @@ add_custom_command(
   COMMAND rm -fr openvino
   COMMAND docker cp openvino_backend_ov:/opt/openvino openvino
   COMMAND docker rm openvino_backend_ov
+  COMMAND echo '<ie><plugins><plugin name=\"CPU\" location=\"libMKLDNNPlugin.so\"></plugin></plugins></ie>' >> openvino/lib/plugins.xml
   COMMENT "Building OpenVino"
 )
 add_custom_target(ov_target DEPENDS openvino/lib/${OPENVINO_LIBRARY})
