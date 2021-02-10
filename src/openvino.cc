@@ -63,8 +63,8 @@ class ModelState : public BackendModel {
 
   // Configures the input and outputs of the network with the user provided
   // configuration.
-  TRITONSERVER_Error* ConfigureNetwork(
-      InferenceEngine::CNNNetwork& network);
+  // TRITONSERVER_Error* ConfigureNetwork(
+  //   InferenceEngine::CNNNetwork& network);
   
   // Loads the configured model on the target device (currently only CPU) is
   // supported.
@@ -140,12 +140,12 @@ ModelState::ReadNetwork(
   return nullptr;  // success
 }
 
+// FIXME Not sure whether it is needed. We can always use the configuration
+// loaded in the model XML.
+#if 0
 TRITONSERVER_Error*
 ModelState::ConfigureNetwork(InferenceEngine::CNNNetwork& network)
 {
-  // FIXME Not sure whether it is needed. We can always use the configuration
-  // loaded in the model XML.
-  #if 0
   auto input_info = network.getInputsInfo().begin()->second;
   std::string input_name = network.getInputsInfo().begin()->first;
 
@@ -162,9 +162,9 @@ ModelState::ConfigureNetwork(InferenceEngine::CNNNetwork& network)
 
         output_info->setPrecision(InferenceEngine::Precision::FP32);
 
-  #endif
   return nullptr;  // success
 }
+#endif
 
 TRITONSERVER_Error*
 ModelState::LoadNetwork(
@@ -279,8 +279,8 @@ ModelInstanceState::ModelInstanceState(
 {
   THROW_IF_BACKEND_INSTANCE_ERROR(
       model_state->ReadNetwork(ArtifactFilename(), &model_path_, &network_));
-  THROW_IF_BACKEND_INSTANCE_ERROR(
-      model_state->ConfigureNetwork(network_));
+  // THROW_IF_BACKEND_INSTANCE_ERROR(
+  //    model_state->ConfigureNetwork(network_));
   THROW_IF_BACKEND_INSTANCE_ERROR(
       model_state->LoadNetwork(network_, &executable_network_));
 
