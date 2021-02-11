@@ -27,6 +27,7 @@
 #include <stdint.h>
 #include <mutex>
 #include <vector>
+#include "openvino_utils.h"
 #include "triton/backend/backend_common.h"
 #include "triton/backend/backend_input_collector.h"
 #include "triton/backend/backend_memory.h"
@@ -53,31 +54,26 @@ class ModelState : public BackendModel {
       TRITONBACKEND_Model* triton_model, ModelState** state);
   virtual ~ModelState() = default;
 
-#if 0
-  // Load an OpenVINNO model using 'artifact_name' as the name for the
-  // model file/directory. If 'instance_group_kind' is not
-  // TRITONSERVER_INSTANCEGROUPKIND_AUTO then use it and
-  // 'instance_group_device_id' to initialize the appropriate
-  // execution providers. Return in 'model_path' the full path to the
-  // model file, return in 'session' and 'allocator' the ORT session
-  // and allocator.
-  TRITONSERVER_Error* LoadModel(
-      const std::string& artifact_name,
-      const TRITONSERVER_InstanceGroupKind instance_group_kind,
-      const int32_t instance_group_device_id, std::string* model_path,
-      OrtSession** session, OrtAllocator** allocator);
-#endif
+  // Reads the Intermediate Representation(IR) model using `artifact_name`
+  // as the name for the model file/directory. Return in `model_path` the
+  // full path to the model file, return `network` the CNNNetwork.
+  TRITONSERVER_Error* ReadNetwork(
+      const std::string& artifact_name, std::string* model_path,
+      InferenceEngine::CNNNetwork* network);
+
+  // Loads the configured model on the target device (currently only CPU) is
+  // supported.
+  TRITONSERVER_Error* LoadNetwork(
+      InferenceEngine::CNNNetwork& network, std::string& device,
+      const std::map<std::string, std::string> network_config,
+      InferenceEngine::ExecutableNetwork* executable_network);
 
  private:
   ModelState(TRITONBACKEND_Model* triton_model);
-#if 0
   TRITONSERVER_Error* AutoCompleteConfig();
-  TRITONSERVER_Error* AutoCompleteMaxBatch(
-      const OnnxTensorInfoMap& input_tensor_infos,
-      const OnnxTensorInfoMap& output_tensor_infos);
-  TRITONSERVER_Error* AutoCompleteIO(
-      const char* key, const OnnxTensorInfoMap& io_infos);
-#endif
+
+  // All the instances of the model will share Core.
+  InferenceEngine::Core inference_core_;
 };
 
 TRITONSERVER_Error*
@@ -93,7 +89,6 @@ ModelState::Create(TRITONBACKEND_Model* triton_model, ModelState** state)
     RETURN_IF_ERROR(ex.err_);
   }
 
-#if 0
   // Auto-complete the configuration if requested...
   bool auto_complete_config = false;
   RETURN_IF_ERROR(TRITONBACKEND_ModelAutoCompleteConfig(
@@ -110,7 +105,6 @@ ModelState::Create(TRITONBACKEND_Model* triton_model, ModelState** state)
     RETURN_IF_ERROR(TRITONBACKEND_ModelSetConfig(
         triton_model, 1 /* config_version */, message));
   }
-#endif
 
   return nullptr;  // success
 }
@@ -118,70 +112,23 @@ ModelState::Create(TRITONBACKEND_Model* triton_model, ModelState** state)
 ModelState::ModelState(TRITONBACKEND_Model* triton_model)
     : BackendModel(triton_model)
 {
-#if 0
-// Create session options that will be cloned and used for each
-  // instance when creating that instance's session.
-  OrtSessionOptions* soptions;
-  THROW_IF_BACKEND_MODEL_ORT_ERROR(ort_api->CreateSessionOptions(&soptions));
-  session_options_.reset(soptions);
-
-  THROW_IF_BACKEND_MODEL_ORT_ERROR(ort_api->SetIntraOpNumThreads(soptions, 1));
-
-  GraphOptimizationLevel optimization_level =
-      GraphOptimizationLevel::ORT_ENABLE_ALL;
-  {
-    triton::common::TritonJson::Value optimization;
-    if (ModelConfig().Find("optimization", &optimization)) {
-      triton::common::TritonJson::Value graph;
-      if (optimization.Find("graph", &graph)) {
-        int64_t graph_level = 0;
-        THROW_IF_BACKEND_MODEL_ERROR(graph.MemberAsInt("level", &graph_level));
-        if (graph_level == -1) {
-          optimization_level = GraphOptimizationLevel::ORT_ENABLE_BASIC;
-        } else if (graph_level == 1) {
-          optimization_level = GraphOptimizationLevel::ORT_ENABLE_EXTENDED;
-        }
-      }
-    }
-  }
-  THROW_IF_BACKEND_MODEL_ORT_ERROR(
-      ort_api->SetSessionGraphOptimizationLevel(soptions, optimization_level));
-
-  // FIXME. Is it possible to share a single OrtSession across
-  // multiple instances? If so then should move loading and validation
-  // of the session to here instead of creating a session for each
-  // instance in ModelStateInstance::Create().
-#endif
 }
 
-#if 0
 TRITONSERVER_Error*
-ModelState::LoadModel(
-    const std::string& artifact_name,
-    const TRITONSERVER_InstanceGroupKind instance_group_kind,
-    const int32_t instance_group_device_id, std::string* model_path,
-    OrtSession** session, OrtAllocator** allocator)
+ModelState::ReadNetwork(
+    const std::string& artifact_name, std::string* model_path,
+    InferenceEngine::CNNNetwork* network)
 {
-  // Find the ONNX file that describes the model itself. If the model
+  // Find the IR file that describes the model itself. If the model
   // configuration doesn't have an explicit model file specified then
-  // use the default name ("model.onnx").
+  // use the default name ("model.xml").
   std::string cc_model_filename = artifact_name;
   if (cc_model_filename.empty()) {
-    cc_model_filename = "model.onnx";
+    cc_model_filename = "model.xml";
   }
 
   *model_path = JoinPath(
       {RepositoryPath(), std::to_string(Version()), cc_model_filename});
-
-  // If the model path is a directory then the actual model is
-  // <dir>/model.onnx.
-  {
-    bool is_dir;
-    RETURN_IF_ERROR(IsDirectory(*model_path, &is_dir));
-    if (is_dir) {
-      *model_path = JoinPath({*model_path, "model.onnx"});
-    }
-  }
 
   {
     bool exists;
@@ -192,93 +139,19 @@ ModelState::LoadModel(
             "' for model instance '" + Name() + "'");
   }
 
-  // Make a clone for the session options for this instance...
-  OrtSessionOptions* soptions;
-  RETURN_IF_ORT_ERROR(
-      ort_api->CloneSessionOptions(session_options_.get(), &soptions));
-  std::unique_ptr<OrtSessionOptions, SessionOptionsDeleter> soptions_wrapper(
-      soptions);
+  *network = inference_core_.ReadNetwork(*model_path);
 
-  bool need_lock = false;
+  return nullptr;  // success
+}
 
-  // Execution providers if they are requested... kind == AUTO if used
-  // to indicate that execution providers should not be added (this is
-  // just a local convention to this function, not the standard
-  // interpretation of AUTO).
-  if (instance_group_kind != TRITONSERVER_INSTANCEGROUPKIND_AUTO) {
-    // Don't need to ensure uniqueness of the providers, ONNX Runtime
-    // will check it.
-
-    // CPU execution providers
-    {
-      triton::common::TritonJson::Value optimization;
-      if (model_config_.Find("optimization", &optimization)) {
-        triton::common::TritonJson::Value eas;
-        if (optimization.Find("execution_accelerators", &eas)) {
-          triton::common::TritonJson::Value cpu_eas;
-          if (eas.Find("cpu_execution_accelerator", &cpu_eas)) {
-            for (size_t ea_idx = 0; ea_idx < cpu_eas.ArraySize(); ea_idx++) {
-              triton::common::TritonJson::Value ea;
-              RETURN_IF_ERROR(cpu_eas.IndexAsObject(ea_idx, &ea));
-              std::string name;
-              RETURN_IF_ERROR(ea.MemberAsString("name", &name));
-#ifdef TRITON_ENABLE_ONNXRUNTIME_OPENVINO
-              if (name == kOpenVINOExecutionAccelerator) {
-                need_lock = true;
-                RETURN_IF_ORT_ERROR(
-                    OrtSessionOptionsAppendExecutionProvider_OpenVINO(
-                        soptions, ""));
-                LOG_MESSAGE(
-                    TRITONSERVER_LOG_VERBOSE,
-                    (std::string(
-                         "OpenVINO Execution Accelerator is set for '") +
-                     Name() + "' on CPU")
-                        .c_str());
-                continue;
-              }
-#endif  // TRITON_ENABLE_ONNXRUNTIME_OPENVINO
-              return TRITONSERVER_ErrorNew(
-                  TRITONSERVER_ERROR_INVALID_ARG,
-                  (std::string("unknown Execution Accelerator '") + name +
-                   "' is requested")
-                      .c_str());
-            }
-          }
-        }
-      }
-    }
-  }
-
-  // Register all op libraries that contain custom operations.
-  {
-    triton::common::TritonJson::Value model_ops;
-    if (model_config_.Find("model_operations", &model_ops)) {
-      triton::common::TritonJson::Value op_library_filenames;
-      if (model_ops.Find("op_library_filename", &op_library_filenames)) {
-        for (size_t op_idx = 0; op_idx < op_library_filenames.ArraySize();
-             op_idx++) {
-          std::string op_filename;
-          RETURN_IF_ERROR(
-              op_library_filenames.IndexAsString(op_idx, &op_filename));
-          void* library_handle = nullptr;
-          RETURN_IF_ORT_ERROR(ort_api->RegisterCustomOpsLibrary(
-              soptions, op_filename.c_str(), &library_handle));
-        }
-      }
-    }
-  }
-
-  // ONNX session creation with OpenVINO is not thread-safe,
-  // so multiple creations are serialized with a global lock.
-  static std::mutex global_context_mu;
-  std::unique_lock<std::mutex> glock(global_context_mu, std::defer_lock);
-  if (need_lock) {
-    glock.lock();
-  }
-
-  RETURN_IF_ERROR(OnnxLoader::LoadSession(
-      true /* is_path */, *model_path, soptions, session));
-  RETURN_IF_ORT_ERROR(ort_api->GetAllocatorWithDefaultOptions(allocator));
+TRITONSERVER_Error*
+ModelState::LoadNetwork(
+    InferenceEngine::CNNNetwork& network, std::string& device,
+    const std::map<std::string, std::string> network_config,
+    InferenceEngine::ExecutableNetwork* executable_network)
+{
+  *executable_network =
+      inference_core_.LoadNetwork(network, device, network_config);
 
   return nullptr;  // success
 }
@@ -286,164 +159,15 @@ ModelState::LoadModel(
 TRITONSERVER_Error*
 ModelState::AutoCompleteConfig()
 {
-  // If the model configuration already specifies inputs and outputs
-  // then don't perform any auto-completion.
-  size_t input_cnt = 0;
-  size_t output_cnt = 0;
-  {
-    triton::common::TritonJson::Value inputs;
-    if (ModelConfig().Find("input", &inputs)) {
-      input_cnt = inputs.ArraySize();
-    }
-    triton::common::TritonJson::Value outputs;
-    if (ModelConfig().Find("output", &outputs)) {
-      output_cnt = outputs.ArraySize();
-    }
-  }
-
-  if ((input_cnt > 0) && (output_cnt > 0)) {
-    LOG_MESSAGE(
-        TRITONSERVER_LOG_INFO,
-        (std::string("skipping model configuration auto-complete for '") +
-         Name() + "': inputs and outputs already specified")
-            .c_str());
-    return nullptr;  // success
-  }
-
-  std::string artifact_name;
-  RETURN_IF_ERROR(
-      ModelConfig().MemberAsString("default_model_filename", &artifact_name));
-
-  // Must cleanup 'session'.  'allocator' is default allocator which
-  // is managed by ONNX Runtime so don't need to free/release
-  std::unique_ptr<OrtSession, SessionDeleter> session;
-  OrtAllocator* allocator;
-  std::string model_path;
-  {
-    OrtSession* sptr = nullptr;
-    RETURN_IF_ERROR(LoadModel(
-        artifact_name, TRITONSERVER_INSTANCEGROUPKIND_AUTO, 0, &model_path,
-        &sptr, &allocator));
-    session.reset(sptr);
-  }
-
-  OnnxTensorInfoMap input_tensor_infos;
-  RETURN_IF_ERROR(InputInfos(session.get(), allocator, input_tensor_infos));
-  OnnxTensorInfoMap output_tensor_infos;
-  RETURN_IF_ERROR(OutputInfos(session.get(), allocator, output_tensor_infos));
-
-  RETURN_IF_ERROR(
-      AutoCompleteMaxBatch(input_tensor_infos, output_tensor_infos));
-  if (input_cnt == 0) {
-    RETURN_IF_ERROR(AutoCompleteIO("input", input_tensor_infos));
-  }
-  if (output_cnt == 0) {
-    RETURN_IF_ERROR(AutoCompleteIO("output", output_tensor_infos));
-  }
-
-  if (TRITONSERVER_LogIsEnabled(TRITONSERVER_LOG_VERBOSE)) {
-    triton::common::TritonJson::WriteBuffer buffer;
-    RETURN_IF_ERROR(ModelConfig().PrettyWrite(&buffer));
-    LOG_MESSAGE(
-        TRITONSERVER_LOG_INFO,
-        (std::string("post auto-complete:\n") + buffer.Contents()).c_str());
-  }
+  // TODO: Add the support for auto completing config for this backend.
+  LOG_MESSAGE(
+      TRITONSERVER_LOG_WARN,
+      (std::string("skipping model configuration auto-complete for '") +
+       Name() + "': not supported for openvino backend")
+          .c_str());
 
   return nullptr;  // success
 }
-
-TRITONSERVER_Error*
-ModelState::AutoCompleteMaxBatch(
-    const OnnxTensorInfoMap& input_tensor_infos,
-    const OnnxTensorInfoMap& output_tensor_infos)
-{
-  // Determine if the model can potentially support batching. All
-  // input and output tensors must have a variable first dimension.
-  bool can_support_batching = true;
-  for (const auto& io_info : input_tensor_infos) {
-    const auto& dims = io_info.second.dims_;
-    if ((dims.size() == 0) || (dims[0] != -1)) {
-      can_support_batching = false;
-    }
-  }
-  for (const auto& io_info : output_tensor_infos) {
-    const auto& dims = io_info.second.dims_;
-    if ((dims.size() == 0) || (dims[0] != -1)) {
-      can_support_batching = false;
-    }
-  }
-
-  // Set max-batch-size to 1 if we have determined that batching is
-  // supported and max-batch-size is not specified. We need to update
-  // the configuration itself as well as the cached value we have already
-  // initialized in the model state.
-  if (can_support_batching) {
-    if (MaxBatchSize() == 0) {
-      triton::common::TritonJson::Value mbs_value;
-      ModelConfig().Find("max_batch_size", &mbs_value);
-      mbs_value.SetInt(1);
-      SetMaxBatchSize(1);
-    }
-  } else if (MaxBatchSize() != 0) {
-    return TRITONSERVER_ErrorNew(
-          TRITONSERVER_ERROR_INVALID_ARG,
-          (std::string("autofill failed for model '") + Name() +
-           "': model does not support batching while non-zero max_batch_size"
-           " is specified").c_str());
-  }
-
-  return nullptr;  // success
-}
-
-TRITONSERVER_Error*
-ModelState::AutoCompleteIO(const char* key, const OnnxTensorInfoMap& io_infos)
-{
-  triton::common::TritonJson::Value existing_ios;
-  bool found_ios = ModelConfig().Find(key, &existing_ios);
-
-  triton::common::TritonJson::Value ios(
-      ModelConfig(), triton::common::TritonJson::ValueType::ARRAY);
-  for (const auto& io_info : io_infos) {
-    triton::common::TritonJson::Value io(
-        ModelConfig(), triton::common::TritonJson::ValueType::OBJECT);
-    RETURN_IF_ERROR(io.AddString("name", io_info.first));
-    RETURN_IF_ERROR(io.AddString(
-        "data_type", OnnxDataTypeToModelConfigDataType(io_info.second.type_)));
-
-    // The model signature supports batching then the first dimension
-    // is -1 and should not appear in the model configuration 'dims'
-    // that we are creating.
-    const auto& io_info_dims = io_info.second.dims_;
-    triton::common::TritonJson::Value dims(
-        ModelConfig(), triton::common::TritonJson::ValueType::ARRAY);
-    for (size_t i = (MaxBatchSize() > 0) ? 1 : 0; i < io_info_dims.size();
-         ++i) {
-      RETURN_IF_ERROR(dims.AppendInt(io_info_dims[i]));
-    }
-
-    // If dims are empty then must use a reshape...
-    if (dims.ArraySize() == 0) {
-      RETURN_IF_ERROR(dims.AppendInt(1));
-      triton::common::TritonJson::Value reshape(
-          ModelConfig(), triton::common::TritonJson::ValueType::OBJECT);
-      triton::common::TritonJson::Value reshape_dims(
-          ModelConfig(), triton::common::TritonJson::ValueType::ARRAY);
-      RETURN_IF_ERROR(reshape.Add("shape", std::move(reshape_dims)));
-      RETURN_IF_ERROR(io.Add("reshape", std::move(reshape)));
-    }
-    RETURN_IF_ERROR(io.Add("dims", std::move(dims)));
-    RETURN_IF_ERROR(ios.Append(std::move(io)));
-  }
-
-  if (found_ios) {
-    existing_ios.Swap(ios);
-  } else {
-    ModelConfig().Add(key, std::move(ios));
-  }
-
-  return nullptr;  // success
-}
-#endif
 
 //
 // ModelInstanceState
@@ -457,7 +181,7 @@ class ModelInstanceState : public BackendModelInstance {
       ModelState* model_state,
       TRITONBACKEND_ModelInstance* triton_model_instance,
       ModelInstanceState** state);
-  virtual ~ModelInstanceState();
+  virtual ~ModelInstanceState() = default;
 
   // Get the state of the model that corresponds to this instance.
   ModelState* StateForModel() const { return model_state_; }
@@ -472,16 +196,11 @@ class ModelInstanceState : public BackendModelInstance {
   ModelInstanceState(
       ModelState* model_state,
       TRITONBACKEND_ModelInstance* triton_model_instance);
-#if 0
-  void ReleaseOrtRunResources();
-  TRITONSERVER_Error* ValidateBooleanSequenceControl(
-      triton::common::TritonJson::Value& sequence_batching,
-      const std::string& control_kind, bool required, bool* have_control);
-  TRITONSERVER_Error* ValidateTypedSequenceControl(
-      triton::common::TritonJson::Value& sequence_batching,
-      const std::string& control_kind, bool required, bool* have_control);
+
+  TRITONSERVER_Error* ValidateConfigureNetwork();
   TRITONSERVER_Error* ValidateInputs(const size_t expected_input_cnt);
   TRITONSERVER_Error* ValidateOutputs();
+#if 0
   void OrtRun(
       std::vector<TRITONBACKEND_Response*>* responses,
       const uint32_t response_count,
@@ -493,24 +212,9 @@ class ModelInstanceState : public BackendModelInstance {
       std::vector<TRITONBACKEND_Response*>* responses,
       BackendInputCollector* collector, std::vector<const char*>* input_names,
       bool* cuda_copy);
-  void SetStringInputTensor(
-      TRITONBACKEND_Request** requests, const uint32_t request_count,
-      std::vector<TRITONBACKEND_Response*>* responses, const char* input_name,
-      std::vector<const char*>* string_ptrs, bool* cuda_copy);
-  void SetStringInputBuffer(
-      const std::string& name, const std::vector<size_t>& expected_byte_sizes,
-      const std::vector<size_t>& expected_element_cnts,
-      std::vector<TRITONBACKEND_Response*>* responses, char* input_buffer,
-      std::vector<const char*>* string_ptrs);
-  void FillStringData(std::vector<const char*>* string_ptrs, size_t cnt);
   void ReadOutputTensors(
       size_t total_batch_size, const std::vector<const char*>& output_names,
       TRITONBACKEND_Request** requests, const uint32_t request_count,
-      std::vector<TRITONBACKEND_Response*>* responses);
-  bool SetStringOutputBuffer(
-      const std::string& name, const char* content, const size_t* offsets,
-      std::vector<int64_t>* batchn_shape, TRITONBACKEND_Request** requests,
-      const uint32_t request_count,
       std::vector<TRITONBACKEND_Response*>* responses);
 #endif
 
@@ -519,18 +223,11 @@ class ModelInstanceState : public BackendModelInstance {
   // The full path to the model file.
   std::string model_path_;
 
-#if 0
-  // Onnx Runtime variables that are used across runs on this
-  // instance.
-  OrtSession* session_;
-  OrtAllocator* allocator_;
+  std::string device_;
 
-  // Onnx Runtime variables that will be reset and used for every run
-  // on this instance.
-  std::vector<OrtValue*> input_tensors_;
-  std::vector<OrtValue*> output_tensors_;
-  std::vector<BackendMemory*> input_tensor_memories_;
-#endif
+  InferenceEngine::CNNNetwork network_;
+  InferenceEngine::ExecutableNetwork executable_network_;
+  InferenceEngine::InferRequest infer_request_;
 };
 
 TRITONSERVER_Error*
@@ -553,202 +250,48 @@ ModelInstanceState::Create(
 
 ModelInstanceState::ModelInstanceState(
     ModelState* model_state, TRITONBACKEND_ModelInstance* triton_model_instance)
-    : BackendModelInstance(model_state, triton_model_instance)
+    : BackendModelInstance(model_state, triton_model_instance),
+      model_state_(model_state), device_("CPU")
 {
-#if 0
-  THROW_IF_BACKEND_INSTANCE_ERROR(model_state->LoadModel(
-      ArtifactFilename(), Kind(), DeviceId(), &model_path_, &session_,
-      &allocator_));
+  if (Kind() != TRITONSERVER_INSTANCEGROUPKIND_CPU) {
+    throw triton::backend::BackendModelInstanceException(TRITONSERVER_ErrorNew(
+        TRITONSERVER_ERROR_INVALID_ARG,
+        (std::string("unable to load model '") + model_state_->Name() +
+         "', openVINO backend supports only CPU device")
+            .c_str()));
+  }
 
+  THROW_IF_BACKEND_INSTANCE_ERROR(
+      model_state_->ReadNetwork(ArtifactFilename(), &model_path_, &network_));
+
+  THROW_IF_BACKEND_INSTANCE_ERROR(ValidateConfigureNetwork());
+
+  // enable dynamic batching in the network
+  std::map<std::string, std::string> network_config;
+  if (model_state_->MaxBatchSize() != 0) {
+    network_config[InferenceEngine::PluginConfigParams::KEY_DYN_BATCH_ENABLED] =
+        InferenceEngine::PluginConfigParams::YES;
+  }
+
+  THROW_IF_BACKEND_INSTANCE_ERROR(model_state->LoadNetwork(
+      network_, device_, network_config, &executable_network_));
+
+  infer_request_ = executable_network_.CreateInferRequest();
+}
+
+TRITONSERVER_Error*
+ModelInstanceState::ValidateConfigureNetwork()
+{
   size_t expected_input_cnt = 0;
   {
     triton::common::TritonJson::Value inputs;
-    if (model_state->ModelConfig().Find("input", &inputs)) {
+    if (model_state_->ModelConfig().Find("input", &inputs)) {
       expected_input_cnt = inputs.ArraySize();
     }
   }
 
-  // If this is a sequence model then make sure that the required
-  // inputs are present in the model and have the correct shape and
-  // datatype.
-  triton::common::TritonJson::Value sequence_batching;
-  if (model_state->ModelConfig().Find(
-          "sequence_batching", &sequence_batching)) {
-    bool have_start, have_end, have_ready, have_corrid;
-    THROW_IF_BACKEND_INSTANCE_ERROR(ValidateBooleanSequenceControl(
-        sequence_batching, "CONTROL_SEQUENCE_START", false /* required */,
-        &have_start));
-    THROW_IF_BACKEND_INSTANCE_ERROR(ValidateBooleanSequenceControl(
-        sequence_batching, "CONTROL_SEQUENCE_END", false /* required */,
-        &have_end));
-    THROW_IF_BACKEND_INSTANCE_ERROR(ValidateBooleanSequenceControl(
-        sequence_batching, "CONTROL_SEQUENCE_READY", false /* required */,
-        &have_ready));
-    THROW_IF_BACKEND_INSTANCE_ERROR(ValidateTypedSequenceControl(
-        sequence_batching, "CONTROL_SEQUENCE_CORRID", false /* required */,
-        &have_corrid));
-    if (have_start) {
-      expected_input_cnt += 1;
-    }
-    if (have_end) {
-      expected_input_cnt += 1;
-    }
-    if (have_ready) {
-      expected_input_cnt += 1;
-    }
-    if (have_corrid) {
-      expected_input_cnt += 1;
-    }
-  }
-
-  THROW_IF_BACKEND_INSTANCE_ERROR(ValidateInputs(expected_input_cnt));
-  THROW_IF_BACKEND_INSTANCE_ERROR(ValidateOutputs());
-#endif
-}
-
-ModelInstanceState::~ModelInstanceState()
-{
-#if 0
-  ReleaseOrtRunResources();
-  if (session_ != nullptr) {
-    OnnxLoader::UnloadSession(session_);
-  }
-  // 'allocator_' is default allocator which is managed by ONNX Runtime
-#endif
-}
-
-#if 0
-void
-ModelInstanceState::ReleaseOrtRunResources()
-{
-  for (auto& tensor : input_tensors_) {
-    if (tensor != nullptr) {
-      ort_api->ReleaseValue(tensor);
-    }
-  }
-  input_tensors_.clear();
-
-  for (auto& tensor : output_tensors_) {
-    if (tensor != nullptr) {
-      ort_api->ReleaseValue(tensor);
-    }
-  }
-  output_tensors_.clear();
-
-  for (BackendMemory* mem : input_tensor_memories_) {
-    delete mem;
-  }
-  input_tensor_memories_.clear();
-}
-
-TRITONSERVER_Error*
-ModelInstanceState::ValidateBooleanSequenceControl(
-    triton::common::TritonJson::Value& sequence_batching,
-    const std::string& control_kind, bool required, bool* have_control)
-{
-  std::string tensor_name;
-  std::string tensor_datatype;
-  RETURN_IF_ERROR(GetBooleanSequenceControlProperties(
-      sequence_batching, model_state_->Name(), control_kind, required,
-      &tensor_name, &tensor_datatype, nullptr, nullptr, nullptr, nullptr));
-  *have_control = !tensor_name.empty();
-  if (*have_control) {
-    OnnxTensorInfoMap input_tensor_infos;
-    RETURN_IF_ERROR(InputInfos(session_, allocator_, input_tensor_infos));
-    const auto& iit = input_tensor_infos.find(tensor_name);
-    if (iit == input_tensor_infos.end()) {
-      return TRITONSERVER_ErrorNew(
-          TRITONSERVER_ERROR_INTERNAL,
-          (std::string("configuration specified sequence control '") +
-           tensor_name + "', but model does not provide that input")
-              .c_str());
-    }
-
-    // Control tensors must have shape [1].
-    const int nonbatch_start_idx = (model_state_->MaxBatchSize() > 0) ? 1 : 0;
-    std::vector<int64_t> debatched_dims;
-    for (size_t i = nonbatch_start_idx; i < iit->second.dims_.size(); i++) {
-      debatched_dims.push_back(iit->second.dims_[i]);
-    }
-
-    if ((debatched_dims.size() != 1) || (debatched_dims[0] != 1)) {
-      return TRITONSERVER_ErrorNew(
-          TRITONSERVER_ERROR_INVALID_ARG,
-          (std::string("unable to load model '") + model_state_->Name() +
-           "', sequence control '" + tensor_name + "' in model has dims " +
-           ShapeToString(debatched_dims) + " but dims [1] is expected")
-              .c_str());
-    }
-
-    if (ModelConfigDataTypeToOnnxDataType(tensor_datatype) !=
-        iit->second.type_) {
-      return TRITONSERVER_ErrorNew(
-          TRITONSERVER_ERROR_INVALID_ARG,
-          (std::string("unable to load model '") + model_state_->Name() +
-           "', sequence control '" + tensor_name +
-           "', the model expects data-type " +
-           OnnxDataTypeName(iit->second.type_) +
-           " but the model configuration specifies data-type " +
-           tensor_datatype)
-              .c_str());
-    }
-  }
-
-  return nullptr;  // success
-}
-
-TRITONSERVER_Error*
-ModelInstanceState::ValidateTypedSequenceControl(
-    triton::common::TritonJson::Value& sequence_batching,
-    const std::string& control_kind, bool required, bool* have_control)
-{
-  std::string tensor_name;
-  std::string tensor_datatype;
-  RETURN_IF_ERROR(GetTypedSequenceControlProperties(
-      sequence_batching, model_state_->Name(), control_kind, required,
-      &tensor_name, &tensor_datatype));
-  *have_control = !tensor_name.empty();
-  if (*have_control) {
-    OnnxTensorInfoMap input_tensor_infos;
-    RETURN_IF_ERROR(InputInfos(session_, allocator_, input_tensor_infos));
-    const auto& iit = input_tensor_infos.find(tensor_name);
-    if (iit == input_tensor_infos.end()) {
-      return TRITONSERVER_ErrorNew(
-          TRITONSERVER_ERROR_INTERNAL,
-          (std::string("configuration specified sequence control '") +
-           tensor_name + "', but model does not provide that input")
-              .c_str());
-    }
-
-    // Control tensors must have shape [1].
-    const int nonbatch_start_idx = (model_state_->MaxBatchSize() > 0) ? 1 : 0;
-    std::vector<int64_t> debatched_dims;
-    for (size_t i = nonbatch_start_idx; i < iit->second.dims_.size(); i++) {
-      debatched_dims.push_back(iit->second.dims_[i]);
-    }
-
-    if ((debatched_dims.size() != 1) || (debatched_dims[0] != 1)) {
-      return TRITONSERVER_ErrorNew(
-          TRITONSERVER_ERROR_INVALID_ARG,
-          (std::string("unable to load model '") + model_state_->Name() +
-           "', sequence control '" + tensor_name + "' in model has dims " +
-           ShapeToString(debatched_dims) + " but dims [1] is expected")
-              .c_str());
-    }
-
-    if (ModelConfigDataTypeToOnnxDataType(tensor_datatype) !=
-        iit->second.type_) {
-      return TRITONSERVER_ErrorNew(
-          TRITONSERVER_ERROR_INVALID_ARG,
-          (std::string("unable to load model '") + model_state_->Name() +
-           "', sequence control '" + tensor_name +
-           "', the model expects data-type " +
-           OnnxDataTypeName(iit->second.type_) +
-           " but the model configuration specifies data-type " +
-           tensor_datatype)
-              .c_str());
-    }
-  }
+  RETURN_IF_ERROR(ValidateInputs(expected_input_cnt));
+  RETURN_IF_ERROR(ValidateOutputs());
 
   return nullptr;  // success
 }
@@ -756,12 +299,7 @@ ModelInstanceState::ValidateTypedSequenceControl(
 TRITONSERVER_Error*
 ModelInstanceState::ValidateInputs(const size_t expected_input_cnt)
 {
-  std::set<std::string> input_tensor_names;
-  RETURN_IF_ERROR(InputNames(session_, input_tensor_names));
-
-  OnnxTensorInfoMap input_tensor_infos;
-  RETURN_IF_ERROR(InputInfos(session_, allocator_, input_tensor_infos));
-
+  auto input_tensor_infos{network_.getInputsInfo()};
   if (input_tensor_infos.size() != expected_input_cnt) {
     return TRITONSERVER_ErrorNew(
         TRITONSERVER_ERROR_INVALID_ARG,
@@ -769,6 +307,11 @@ ModelInstanceState::ValidateInputs(const size_t expected_input_cnt)
          "', configuration expects " + std::to_string(expected_input_cnt) +
          " inputs, model provides " + std::to_string(input_tensor_infos.size()))
             .c_str());
+  }
+
+  std::set<std::string> input_tensor_names;
+  for (const auto& input_tensor_info : input_tensor_infos) {
+    input_tensor_names.insert(input_tensor_info.first);
   }
 
   triton::common::TritonJson::Value ios;
@@ -786,23 +329,15 @@ ModelInstanceState::ValidateInputs(const size_t expected_input_cnt)
       RETURN_IF_ERROR(CheckAllowedModelInput(io, input_tensor_names));
     }
 
-    auto onnx_data_type = ModelConfigDataTypeToOnnxDataType(io_dtype);
-    if (onnx_data_type == ONNX_TENSOR_ELEMENT_DATA_TYPE_UNDEFINED) {
+    auto openvino_precision = ModelConfigDataTypeToOpenVINOPrecision(io_dtype);
+    if (openvino_precision == InferenceEngine::Precision::UNSPECIFIED) {
       return TRITONSERVER_ErrorNew(
           TRITONSERVER_ERROR_INTERNAL,
           (std::string("unsupported datatype ") + io_dtype + " for input '" +
            io_name + "' for model '" + model_state_->Name() + "'")
               .c_str());
-    } else if (onnx_data_type != iit->second.type_) {
-      return TRITONSERVER_ErrorNew(
-          TRITONSERVER_ERROR_INVALID_ARG,
-          (std::string("unable to load model '") + model_state_->Name() +
-           ", unexpected datatype " +
-           TRITONSERVER_DataTypeString(
-               ConvertFromOnnxDataType(iit->second.type_)) +
-           " for input '" + io_name + "', expecting " + io_dtype)
-              .c_str());
     }
+    iit->second->setPrecision(openvino_precision);
 
     // If a reshape is provided for the input then use that when
     // validating that the model matches what is expected.
@@ -814,9 +349,12 @@ ModelInstanceState::ValidateInputs(const size_t expected_input_cnt)
       RETURN_IF_ERROR(ParseShape(io, "dims", &dims));
     }
     RETURN_IF_ERROR(CompareDimsSupported(
-        model_state_->Name(), io_name, iit->second.dims_, dims,
-        model_state_->MaxBatchSize(), false /* compare_exact */));
+        model_state_->Name(), io_name, iit->second->getTensorDesc().getDims(),
+        dims, model_state_->MaxBatchSize(), false /* compare_exact */));
   }
+
+  // Configuring the network to handle the max_batch_size
+  SetBatchSize(model_state_->MaxBatchSize(), &network_);
 
   return nullptr;  // success
 }
@@ -824,11 +362,12 @@ ModelInstanceState::ValidateInputs(const size_t expected_input_cnt)
 TRITONSERVER_Error*
 ModelInstanceState::ValidateOutputs()
 {
-  std::set<std::string> output_tensor_names;
-  RETURN_IF_ERROR(OutputNames(session_, output_tensor_names));
+  auto output_tensor_infos{network_.getOutputsInfo()};
 
-  OnnxTensorInfoMap output_tensor_infos;
-  RETURN_IF_ERROR(OutputInfos(session_, allocator_, output_tensor_infos));
+  std::set<std::string> output_tensor_names;
+  for (const auto& output_tensor_info : output_tensor_infos) {
+    output_tensor_names.insert(output_tensor_info.first);
+  }
 
   triton::common::TritonJson::Value ios;
   RETURN_IF_ERROR(model_state_->ModelConfig().MemberAsArray("output", &ios));
@@ -845,23 +384,15 @@ ModelInstanceState::ValidateOutputs()
       RETURN_IF_ERROR(CheckAllowedModelOutput(io, output_tensor_names));
     }
 
-    auto onnx_data_type = ModelConfigDataTypeToOnnxDataType(io_dtype);
-    if (onnx_data_type == ONNX_TENSOR_ELEMENT_DATA_TYPE_UNDEFINED) {
+    auto openvino_precision = ModelConfigDataTypeToOpenVINOPrecision(io_dtype);
+    if (openvino_precision == InferenceEngine::Precision::UNSPECIFIED) {
       return TRITONSERVER_ErrorNew(
           TRITONSERVER_ERROR_INTERNAL,
-          (std::string("unsupported datatype ") + io_dtype + " for output '" +
+          (std::string("unsupported datatype ") + io_dtype + " for input '" +
            io_name + "' for model '" + model_state_->Name() + "'")
               .c_str());
-    } else if (onnx_data_type != iit->second.type_) {
-      return TRITONSERVER_ErrorNew(
-          TRITONSERVER_ERROR_INVALID_ARG,
-          (std::string("unable to load model '") + model_state_->Name() +
-           ", unexpected datatype " +
-           TRITONSERVER_DataTypeString(
-               ConvertFromOnnxDataType(iit->second.type_)) +
-           " for output '" + io_name + "', expecting " + io_dtype)
-              .c_str());
     }
+    iit->second->setPrecision(openvino_precision);
 
     // If a reshape is provided for the input then use that when
     // validating that the model matches what is expected.
@@ -873,13 +404,14 @@ ModelInstanceState::ValidateOutputs()
       RETURN_IF_ERROR(ParseShape(io, "dims", &dims));
     }
     RETURN_IF_ERROR(CompareDimsSupported(
-        model_state_->Name(), io_name, iit->second.dims_, dims,
-        model_state_->MaxBatchSize(), true /* compare_exact */));
+        model_state_->Name(), io_name, iit->second->getTensorDesc().getDims(),
+        dims, model_state_->MaxBatchSize(), true /* compare_exact */));
   }
 
   return nullptr;  // success
 }
 
+#if 0
 void
 ModelInstanceState::ProcessRequests(
     TRITONBACKEND_Request** requests, const uint32_t request_count)
@@ -1829,7 +1361,7 @@ TRITONBACKEND_ModelInstanceExecute(
   // this function. If something does go wrong in processing a
   // particular request then we send an error response just for the
   // specific request.
-//  instance_state->ProcessRequests(requests, request_count);
+  //  instance_state->ProcessRequests(requests, request_count);
 
   return nullptr;  // success
 }

@@ -94,6 +94,8 @@ configure_file(src/libtriton_openvino.ldscript libtriton_openvino.ldscript COPYO
 add_library(
   triton-openvino-backend SHARED
   src/openvino.cc
+  src/openvino_utils.cc
+  src/openvino_utils.h
 )
 
 add_library(
