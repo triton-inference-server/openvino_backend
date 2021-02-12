@@ -44,7 +44,95 @@ namespace triton { namespace backend { namespace openvino {
     }                                                                  \
   } while (false)
 
-std::string OpenVINOPrecision(InferenceEngine::Precision openvino_precision);
+#define RETURN_IF_OPENVINO_ASSIGN_ERROR(V, S, M)                      \
+  do {                                                                \
+    std::string error_str;                                            \
+    try {                                                             \
+      V = (S);                                                        \
+    }                                                                 \
+    catch (const std::exception& error) {                             \
+      error_str = error.what();                                       \
+    }                                                                 \
+    catch (...) {                                                     \
+      error_str = "unknown/internal exception happened";              \
+    }                                                                 \
+    if (!error_str.empty()) {                                         \
+      return TRITONSERVER_ErrorNew(                                   \
+          TRITONSERVER_ERROR_INTERNAL,                                \
+          (std::string("openvino error in ") + M + " : " + error_str) \
+              .c_str());                                              \
+    }                                                                 \
+  } while (false)
+
+#define RETURN_IF_OPENVINO_ERROR(S, M)                                \
+  do {                                                                \
+    std::string error_str;                                            \
+    try {                                                             \
+      (S);                                                            \
+    }                                                                 \
+    catch (const std::exception& error) {                             \
+      error_str = error.what();                                       \
+    }                                                                 \
+    catch (...) {                                                     \
+      error_str = "unknown/internal exception happened";              \
+    }                                                                 \
+    if (!error_str.empty()) {                                         \
+      return TRITONSERVER_ErrorNew(                                   \
+          TRITONSERVER_ERROR_INTERNAL,                                \
+          (std::string("openvino error in ") + M + " : " + error_str) \
+              .c_str());                                              \
+    }                                                                 \
+  } while (false)
+
+#define RESPOND_ALL_AND_RETURN_IF_OPENVINO_ASSIGN_ERROR(V, R, C, S, M)    \
+  do {                                                                    \
+    std::string error_str;                                                \
+    try {                                                                 \
+      V = (S);                                                            \
+    }                                                                     \
+    catch (const std::exception& error) {                                 \
+      error_str = error.what();                                           \
+    }                                                                     \
+    catch (...) {                                                         \
+      error_str = "unknown/internal exception happened";                  \
+    }                                                                     \
+    if (!error_str.empty()) {                                             \
+      SendErrorForResponses(                                              \
+          R, C,                                                           \
+          TRITONSERVER_ErrorNew(                                          \
+              TRITONSERVER_ERROR_INTERNAL,                                \
+              (std::string("openvino error in ") + M + " : " + error_str) \
+                  .c_str()));                                             \
+      return;                                                             \
+    }                                                                     \
+  } while (false)
+
+#define RESPOND_ALL_AND_RETURN_IF_OPENVINO_ERROR(R, C, S, M)              \
+  do {                                                                    \
+    std::string error_str;                                                \
+    try {                                                                 \
+      (S);                                                                \
+    }                                                                     \
+    catch (const std::exception& error) {                                 \
+      error_str = error.what();                                           \
+    }                                                                     \
+    catch (...) {                                                         \
+      error_str = "unknown/internal exception happened.";                 \
+    }                                                                     \
+    if (!error_str.empty()) {                                             \
+      SendErrorForResponses(                                              \
+          R, C,                                                           \
+          TRITONSERVER_ErrorNew(                                          \
+              TRITONSERVER_ERROR_INTERNAL,                                \
+              (std::string("openvino error in ") + M + " : " + error_str) \
+                  .c_str()));                                             \
+      return;                                                             \
+    }                                                                     \
+  } while (false)
+
+
+std::string OpenVINOPrecisionToString(
+    InferenceEngine::Precision openvino_precision);
 
 TRITONSERVER_DataType ConvertFromOpenVINOPrecision(
     InferenceEngine::Precision openvino_precision);
@@ -69,5 +157,10 @@ void SetBatchSize(
 bool AdjustShapesBatch(
     InferenceEngine::ICNNNetwork::InputShapes& shapes, const size_t batch_size,
     const InferenceEngine::InputsDataMap& input_info);
+
+std::vector<int64_t> ConvertToSignedShape(const std::vector<size_t> shape);
+
+InferenceEngine::Blob::Ptr WrapInputBufferToBlob(
+    const InferenceEngine::TensorDesc& tensor_desc, char* input_buffer);
 
 }}}  // namespace triton::backend::openvino
