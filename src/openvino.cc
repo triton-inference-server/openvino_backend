@@ -58,22 +58,36 @@ class ModelState : public BackendModel {
   // as the name for the model file/directory. Return in `model_path` the
   // full path to the model file, return `network` the CNNNetwork.
   TRITONSERVER_Error* ReadNetwork(
-      const std::string& artifact_name, std::string* model_path,
-      InferenceEngine::CNNNetwork* network);
+      const std::string& artifact_name, std::string* model_path);
 
   // Loads the configured model on the target device (currently only CPU) is
   // supported.
   TRITONSERVER_Error* LoadNetwork(
-      InferenceEngine::CNNNetwork& network, std::string& device,
-      const std::map<std::string, std::string> network_config,
-      InferenceEngine::ExecutableNetwork* executable_network);
+      const std::string& device,
+      const std::map<std::string, std::string> network_config);
+
+  // Creates an infer request object on the specified device.
+  TRITONSERVER_Error* CreateInferRequest(
+      const std::string& device, InferenceEngine::InferRequest* infer_request);
+
+  // Whether or not the network is read successfully
+  bool NetworkNotRead();
+  // Whether or not a executable network is loaded on
+  // the specified device.
+  bool NetworkNotLoaded(const std::string device_);
+
+  InferenceEngine::CNNNetwork* Network() { return &network_; }
 
  private:
   ModelState(TRITONBACKEND_Model* triton_model);
   TRITONSERVER_Error* AutoCompleteConfig();
 
-  // All the instances of the model will share Core.
+  // Shared resources along the multiple instances.
   InferenceEngine::Core inference_core_;
+  InferenceEngine::CNNNetwork network_;
+  std::map<std::string, InferenceEngine::ExecutableNetwork> executable_network_;
+
+  bool network_read_;
 };
 
 TRITONSERVER_Error*
@@ -110,15 +124,19 @@ ModelState::Create(TRITONBACKEND_Model* triton_model, ModelState** state)
 }
 
 ModelState::ModelState(TRITONBACKEND_Model* triton_model)
-    : BackendModel(triton_model)
+    : BackendModel(triton_model), network_read_(false)
 {
 }
 
 TRITONSERVER_Error*
 ModelState::ReadNetwork(
-    const std::string& artifact_name, std::string* model_path,
-    InferenceEngine::CNNNetwork* network)
+    const std::string& artifact_name, std::string* model_path)
 {
+  RETURN_ERROR_IF_FALSE(
+      NetworkNotRead(), TRITONSERVER_ERROR_INTERNAL,
+      std::string("attempt to read model at '") + *model_path +
+          "' more than once");
+
   // Find the IR file that describes the model itself. If the model
   // configuration doesn't have an explicit model file specified then
   // use the default name ("model.xml").
@@ -135,28 +153,57 @@ ModelState::ReadNetwork(
     RETURN_IF_ERROR(FileExists(*model_path, &exists));
     RETURN_ERROR_IF_FALSE(
         exists, TRITONSERVER_ERROR_UNAVAILABLE,
-        std::string("unable to find '") + *model_path +
-            "' for model instance '" + Name() + "'");
+        std::string("unable to find '") + *model_path + "' for model '" +
+            Name() + "'");
   }
 
   RETURN_IF_OPENVINO_ASSIGN_ERROR(
-      *network, inference_core_.ReadNetwork(*model_path), "reading network");
+      network_, inference_core_.ReadNetwork(*model_path), "reading network");
 
+  network_read_ = true;
   return nullptr;  // success
 }
 
 TRITONSERVER_Error*
 ModelState::LoadNetwork(
-    InferenceEngine::CNNNetwork& network, std::string& device,
-    const std::map<std::string, std::string> network_config,
-    InferenceEngine::ExecutableNetwork* executable_network)
+    const std::string& device,
+    const std::map<std::string, std::string> network_config)
 {
+  RETURN_ERROR_IF_FALSE(
+      NetworkNotLoaded(device), TRITONSERVER_ERROR_INTERNAL,
+      std::string("attempt to load model '") + Name() + "' on device '" +
+          device + "' more than once");
+
   RETURN_IF_OPENVINO_ASSIGN_ERROR(
-      *executable_network,
-      inference_core_.LoadNetwork(network, device, network_config),
+      executable_network_[device],
+      inference_core_.LoadNetwork(network_, device, network_config),
       "loading network");
 
   return nullptr;  // success
+}
+
+TRITONSERVER_Error*
+ModelState::CreateInferRequest(
+    const std::string& device, InferenceEngine::InferRequest* infer_request)
+{
+  RETURN_IF_OPENVINO_ASSIGN_ERROR(
+      *infer_request, executable_network_[device].CreateInferRequest(),
+      "creating infer request object");
+
+  return nullptr;
+}
+
+bool
+ModelState::NetworkNotRead()
+{
+  return !network_read_;
+}
+
+bool
+ModelState::NetworkNotLoaded(const std::string device)
+{
+  auto itr = executable_network_.find(device);
+  return (itr == executable_network_.end());
 }
 
 TRITONSERVER_Error*
@@ -202,7 +249,6 @@ class ModelInstanceState : public BackendModelInstance {
   TRITONSERVER_Error* ValidateInputs(const size_t expected_input_cnt);
   TRITONSERVER_Error* ValidateOutputs();
 
-  TRITONSERVER_Error* CreateInferRequest();
   TRITONSERVER_Error* SetBatch(const int batch_size);
   TRITONSERVER_Error* Infer(
       std::vector<TRITONBACKEND_Response*>* responses,
@@ -224,9 +270,6 @@ class ModelInstanceState : public BackendModelInstance {
   std::string model_path_;
 
   std::string device_;
-
-  InferenceEngine::CNNNetwork network_;
-  InferenceEngine::ExecutableNetwork executable_network_;
   InferenceEngine::InferRequest infer_request_;
 };
 
@@ -261,31 +304,26 @@ ModelInstanceState::ModelInstanceState(
             .c_str()));
   }
 
-  THROW_IF_BACKEND_INSTANCE_ERROR(
-      model_state_->ReadNetwork(ArtifactFilename(), &model_path_, &network_));
-  THROW_IF_BACKEND_INSTANCE_ERROR(ValidateConfigureNetwork());
-
-  // enable dynamic batching in the network
-  std::map<std::string, std::string> network_config;
-  if (model_state_->MaxBatchSize() != 0) {
-    network_config[InferenceEngine::PluginConfigParams::KEY_DYN_BATCH_ENABLED] =
-        InferenceEngine::PluginConfigParams::YES;
+  if (model_state->NetworkNotRead()) {
+    THROW_IF_BACKEND_INSTANCE_ERROR(
+        model_state_->ReadNetwork(ArtifactFilename(), &model_path_));
+    THROW_IF_BACKEND_INSTANCE_ERROR(ValidateConfigureNetwork());
   }
 
-  THROW_IF_BACKEND_INSTANCE_ERROR(model_state->LoadNetwork(
-      network_, device_, network_config, &executable_network_));
+  if (model_state->NetworkNotLoaded(device_)) {
+    // enable dynamic batching in the network
+    std::map<std::string, std::string> network_config;
+    if (model_state_->MaxBatchSize() != 0) {
+      network_config
+          [InferenceEngine::PluginConfigParams::KEY_DYN_BATCH_ENABLED] =
+              InferenceEngine::PluginConfigParams::YES;
+    }
+    THROW_IF_BACKEND_INSTANCE_ERROR(
+        model_state->LoadNetwork(device_, network_config));
+  }
 
-  THROW_IF_BACKEND_INSTANCE_ERROR(CreateInferRequest());
-}
-
-TRITONSERVER_Error*
-ModelInstanceState::CreateInferRequest()
-{
-  RETURN_IF_OPENVINO_ASSIGN_ERROR(
-      infer_request_, executable_network_.CreateInferRequest(),
-      "creating infer request object");
-
-  return nullptr;
+  THROW_IF_BACKEND_INSTANCE_ERROR(
+      model_state->CreateInferRequest(device_, &infer_request_));
 }
 
 TRITONSERVER_Error*
@@ -308,7 +346,7 @@ ModelInstanceState::ValidateConfigureNetwork()
 TRITONSERVER_Error*
 ModelInstanceState::ValidateInputs(const size_t expected_input_cnt)
 {
-  auto input_tensor_infos{network_.getInputsInfo()};
+  auto input_tensor_infos{model_state_->Network()->getInputsInfo()};
   if (input_tensor_infos.size() != expected_input_cnt) {
     return TRITONSERVER_ErrorNew(
         TRITONSERVER_ERROR_INVALID_ARG,
@@ -366,7 +404,7 @@ ModelInstanceState::ValidateInputs(const size_t expected_input_cnt)
 
   // Configuring the network to handle the max_batch_size
   RETURN_IF_OPENVINO_ERROR(
-      SetBatchSize(model_state_->MaxBatchSize(), &network_),
+      SetBatchSize(model_state_->MaxBatchSize(), model_state_->Network()),
       "setting max batch size");
   return nullptr;  // success
 }
@@ -374,7 +412,7 @@ ModelInstanceState::ValidateInputs(const size_t expected_input_cnt)
 TRITONSERVER_Error*
 ModelInstanceState::ValidateOutputs()
 {
-  auto output_tensor_infos{network_.getOutputsInfo()};
+  auto output_tensor_infos{model_state_->Network()->getOutputsInfo()};
 
   std::set<std::string> output_tensor_names;
   for (const auto& output_tensor_info : output_tensor_infos) {
@@ -659,7 +697,7 @@ ModelInstanceState::SetInputTensors(
       responses, request_count,
       TRITONBACKEND_RequestInputCount(requests[0], &input_count));
 
-  auto input_tensor_infos{network_.getInputsInfo()};
+  auto input_tensor_infos{model_state_->Network()->getInputsInfo()};
 
   for (uint32_t input_idx = 0; input_idx < input_count; input_idx++) {
     TRITONBACKEND_Input* input;
