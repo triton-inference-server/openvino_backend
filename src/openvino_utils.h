@@ -31,6 +31,7 @@
 #include <string>
 #include <unordered_map>
 #include <vector>
+#include "triton/backend/backend_common.h"
 #include "triton/core/tritonserver.h"
 
 namespace triton { namespace backend { namespace openvino {
@@ -131,12 +132,13 @@ namespace triton { namespace backend { namespace openvino {
   } while (false)
 
 
+std::string ConvertVersionMapToString(
+    const std::map<std::string, InferenceEngine::Version>& version_map);
 std::string OpenVINOPrecisionToString(
     InferenceEngine::Precision openvino_precision);
 
 TRITONSERVER_DataType ConvertFromOpenVINOPrecision(
     InferenceEngine::Precision openvino_precision);
-
 InferenceEngine::Precision ConvertToOpenVINOPrecision(
     TRITONSERVER_DataType data_type);
 InferenceEngine::Precision ConvertToOpenVINOPrecision(
@@ -151,6 +153,10 @@ TRITONSERVER_Error* CompareDimsSupported(
     const std::string& model_name, const std::string& tensor_name,
     const std::vector<size_t>& model_shape, const std::vector<int64_t>& dims,
     const int max_batch_size, const bool compare_exact);
+
+TRITONSERVER_Error* ReadParameter(
+    triton::common::TritonJson::Value& params, const std::string& key,
+    std::string* param);
 
 void SetBatchSize(
     const size_t batch_size, InferenceEngine::CNNNetwork* network);

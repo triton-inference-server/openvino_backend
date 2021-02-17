@@ -28,7 +28,6 @@
 #include <mutex>
 #include <vector>
 #include "openvino_utils.h"
-#include "triton/backend/backend_common.h"
 #include "triton/backend/backend_input_collector.h"
 #include "triton/backend/backend_memory.h"
 #include "triton/backend/backend_model.h"
@@ -40,6 +39,17 @@
 //
 
 namespace triton { namespace backend { namespace openvino {
+
+namespace {
+
+bool
+IsNumber(const std::string& str)
+{
+  return std::find_if(str.begin(), str.end(), [](unsigned char c) {
+           return !std::isdigit(c);
+         }) == str.end();
+}
+}  // namespace
 
 //
 // ModelState
@@ -54,11 +64,25 @@ class ModelState : public BackendModel {
       TRITONBACKEND_Model* triton_model, ModelState** state);
   virtual ~ModelState() = default;
 
+  // Performs initial setups of Inference Engine
+  TRITONSERVER_Error* ConfigureInferenceEngine(const std::string& device);
+  TRITONSERVER_Error* LoadCpuExtensions(
+      triton::common::TritonJson::Value& params);
+  TRITONSERVER_Error* ParseParameter(
+      const std::string& mkey, triton::common::TritonJson::Value& params,
+      std::map<std::string, std::string>* device_config);
+  TRITONSERVER_Error* ParseParameterHelper(
+      const std::string& mkey, std::string* ov_key, std::string* value);
+
   // Reads the Intermediate Representation(IR) model using `artifact_name`
   // as the name for the model file/directory. Return in `model_path` the
   // full path to the model file, return `network` the CNNNetwork.
   TRITONSERVER_Error* ReadNetwork(
       const std::string& artifact_name, std::string* model_path);
+
+  TRITONSERVER_Error* ValidateConfigureNetwork();
+  TRITONSERVER_Error* ValidateInputs(const size_t expected_input_cnt);
+  TRITONSERVER_Error* ValidateOutputs();
 
   // Loads the configured model on the target device (currently only CPU) is
   // supported.
@@ -82,10 +106,12 @@ class ModelState : public BackendModel {
   ModelState(TRITONBACKEND_Model* triton_model);
   TRITONSERVER_Error* AutoCompleteConfig();
 
-  // Shared resources along the multiple instances.
-  InferenceEngine::Core inference_core_;
+  // Shared resources among the multiple instances.
+  InferenceEngine::Core inference_engine_;
   InferenceEngine::CNNNetwork network_;
   std::map<std::string, InferenceEngine::ExecutableNetwork> executable_network_;
+  // Maps device to their respective parameters
+  std::map<std::string, std::map<std::string, std::string>> config_;
 
   bool network_read_;
 };
@@ -158,10 +184,145 @@ ModelState::ReadNetwork(
   }
 
   RETURN_IF_OPENVINO_ASSIGN_ERROR(
-      network_, inference_core_.ReadNetwork(*model_path), "reading network");
+      network_, inference_engine_.ReadNetwork(*model_path), "reading network");
 
   network_read_ = true;
   return nullptr;  // success
+}
+
+TRITONSERVER_Error*
+ModelState::ConfigureInferenceEngine(const std::string& device)
+{
+  // Validate and set parameters
+  triton::common::TritonJson::Value params;
+  bool status = model_config_.Find("parameters", &params);
+  if (status) {
+    if (device == "CPU") {
+      RETURN_IF_ERROR(LoadCpuExtensions(params));
+      config_[device] = {};
+      auto& device_config = config_.at(device);
+      RETURN_IF_ERROR(
+          ParseParameter("CPU_THREADS_NUM", params, &device_config));
+      RETURN_IF_ERROR(ParseParameter("ENFORCE_BF16", params, &device_config));
+      RETURN_IF_ERROR(
+          ParseParameter("CPU_BIND_THREAD", params, &device_config));
+      RETURN_IF_ERROR(
+          ParseParameter("CPU_THROUGHPUT_STREAMS", params, &device_config));
+    }
+  }
+  for (auto&& item : config_) {
+    RETURN_IF_OPENVINO_ERROR(
+        inference_engine_.SetConfig(item.second, item.first),
+        "configuring inference engine");
+  }
+
+  return nullptr;
+}
+
+TRITONSERVER_Error*
+ModelState::LoadCpuExtensions(triton::common::TritonJson::Value& params)
+{
+  std::string cpu_ext_path;
+  ReadParameter(params, "CPU_EXTENSION_PATH", &(cpu_ext_path));
+  if (!cpu_ext_path.empty()) {
+    // CPU (MKLDNN) extensions is loaded as a shared library and passed as a
+    // pointer to base extension
+    const auto extension_ptr =
+        InferenceEngine::make_so_pointer<InferenceEngine::IExtension>(
+            cpu_ext_path);
+    RETURN_IF_OPENVINO_ERROR(
+        inference_engine_.AddExtension(extension_ptr),
+        " loading custom CPU extensions");
+    LOG_MESSAGE(
+        TRITONSERVER_LOG_INFO,
+        (std::string("CPU (MKLDNN) extensions is loaded") + cpu_ext_path)
+            .c_str());
+  }
+
+  return nullptr;
+}
+
+TRITONSERVER_Error*
+ModelState::ParseParameter(
+    const std::string& mkey, triton::common::TritonJson::Value& params,
+    std::map<std::string, std::string>* device_config)
+{
+  std::string value;
+  ReadParameter(params, mkey, &(value));
+  if (!value.empty()) {
+    std::string ov_key;
+    RETURN_IF_ERROR(ParseParameterHelper(mkey, &ov_key, &value));
+    (*device_config)[ov_key] = value;
+  }
+  return nullptr;
+}
+
+TRITONSERVER_Error*
+ModelState::ParseParameterHelper(
+    const std::string& mkey, std::string* ov_key, std::string* value)
+{
+  std::transform(
+      value->begin(), value->end(), value->begin(),
+      [](unsigned char c) { return std::tolower(c); });
+  if (mkey.compare("CPU_THREADS_NUM") == 0) {
+    if (!IsNumber(*value)) {
+      return TRITONSERVER_ErrorNew(
+          TRITONSERVER_ERROR_INVALID_ARG,
+          (std::string("expected the parameter '") + mkey +
+           "' to be a non-negative number, got " + *value)
+              .c_str());
+    }
+    *ov_key = CONFIG_KEY(CPU_THREADS_NUM);
+  } else if (mkey.compare("ENFORCE_BF16") == 0) {
+    if (value->compare("yes") == 0) {
+      *value = CONFIG_VALUE(YES);
+    } else if (value->compare("no") == 0) {
+      *value = CONFIG_VALUE(NO);
+    } else {
+      return TRITONSERVER_ErrorNew(
+          TRITONSERVER_ERROR_INVALID_ARG,
+          (std::string("expected the parameter '") + mkey +
+           "' to be either YES or NO, got " + *value)
+              .c_str());
+    }
+    *ov_key = CONFIG_KEY(ENFORCE_BF16);
+  } else if (mkey.compare("CPU_BIND_THREAD") == 0) {
+    if (value->compare("yes") == 0) {
+      *value = CONFIG_VALUE(YES);
+    } else if (value->compare("numa") == 0) {
+      *value = CONFIG_VALUE(NUMA);
+    } else if (value->compare("no") == 0) {
+      *value = CONFIG_VALUE(NO);
+    } else {
+      return TRITONSERVER_ErrorNew(
+          TRITONSERVER_ERROR_INVALID_ARG,
+          (std::string("expected the parameter '") + mkey +
+           "' to be either YES/NUMA/NO, got " + *value)
+              .c_str());
+    }
+    *ov_key = CONFIG_KEY(CPU_BIND_THREAD);
+  } else if (mkey.compare("CPU_THROUGHPUT_STREAMS") == 0) {
+    if (value->compare("auto") == 0) {
+      *value = "CPU_THROUGHPUT_AUTO";
+    } else if (value->compare("numa") == 0) {
+      *value = "CPU_THROUGHPUT_NUMA";
+    } else if (!IsNumber(*value)) {
+      return TRITONSERVER_ErrorNew(
+          TRITONSERVER_ERROR_INVALID_ARG,
+          (std::string("expected the parameter '") + mkey +
+           "' to be a non-negative number or AUTO/NUMA, got " + *value)
+              .c_str());
+    }
+    *ov_key = CONFIG_KEY(CPU_THROUGHPUT_STREAMS);
+  } else {
+    return TRITONSERVER_ErrorNew(
+        TRITONSERVER_ERROR_INVALID_ARG,
+        (std::string("the parameter '") + mkey +
+         "' is not yet supported by openvino backend")
+            .c_str());
+  }
+
+  return nullptr;
 }
 
 TRITONSERVER_Error*
@@ -174,9 +335,22 @@ ModelState::LoadNetwork(
       std::string("attempt to load model '") + Name() + "' on device '" +
           device + "' more than once");
 
+  RETURN_IF_ERROR(ConfigureInferenceEngine(device));
+
+  LOG_MESSAGE(
+      TRITONSERVER_LOG_VERBOSE,
+      (std::string("InferenceEngine: ") +
+       InferenceEngine::GetInferenceEngineVersion()->description)
+          .c_str());
+  LOG_MESSAGE(
+      TRITONSERVER_LOG_VERBOSE,
+      (std::string("Device info: \n") +
+       ConvertVersionMapToString(inference_engine_.GetVersions(device)))
+          .c_str());
+
   RETURN_IF_OPENVINO_ASSIGN_ERROR(
       executable_network_[device],
-      inference_core_.LoadNetwork(network_, device, network_config),
+      inference_engine_.LoadNetwork(network_, device, network_config),
       "loading network");
 
   return nullptr;  // success
@@ -204,6 +378,142 @@ ModelState::NetworkNotLoaded(const std::string device)
 {
   auto itr = executable_network_.find(device);
   return (itr == executable_network_.end());
+}
+
+TRITONSERVER_Error*
+ModelState::ValidateConfigureNetwork()
+{
+  size_t expected_input_cnt = 0;
+  {
+    triton::common::TritonJson::Value inputs;
+    if (model_config_.Find("input", &inputs)) {
+      expected_input_cnt = inputs.ArraySize();
+    }
+  }
+
+  RETURN_IF_ERROR(ValidateInputs(expected_input_cnt));
+  RETURN_IF_ERROR(ValidateOutputs());
+
+  return nullptr;  // success
+}
+
+TRITONSERVER_Error*
+ModelState::ValidateInputs(const size_t expected_input_cnt)
+{
+  auto input_tensor_infos{network_.getInputsInfo()};
+  if (input_tensor_infos.size() != expected_input_cnt) {
+    return TRITONSERVER_ErrorNew(
+        TRITONSERVER_ERROR_INVALID_ARG,
+        (std::string("unable to load model '") + Name() +
+         "', configuration expects " + std::to_string(expected_input_cnt) +
+         " inputs, model provides " + std::to_string(input_tensor_infos.size()))
+            .c_str());
+  }
+
+  std::set<std::string> input_tensor_names;
+  for (const auto& input_tensor_info : input_tensor_infos) {
+    input_tensor_names.insert(input_tensor_info.first);
+  }
+
+  triton::common::TritonJson::Value ios;
+  RETURN_IF_ERROR(model_config_.MemberAsArray("input", &ios));
+  for (size_t i = 0; i < ios.ArraySize(); i++) {
+    triton::common::TritonJson::Value io;
+    RETURN_IF_ERROR(ios.IndexAsObject(i, &io));
+    std::string io_name;
+    RETURN_IF_ERROR(io.MemberAsString("name", &io_name));
+    std::string io_dtype;
+    RETURN_IF_ERROR(io.MemberAsString("data_type", &io_dtype));
+
+    auto iit = input_tensor_infos.find(io_name);
+    if (iit == input_tensor_infos.end()) {
+      RETURN_IF_ERROR(CheckAllowedModelInput(io, input_tensor_names));
+    }
+
+    auto openvino_precision = ModelConfigDataTypeToOpenVINOPrecision(io_dtype);
+    if (openvino_precision == InferenceEngine::Precision::UNSPECIFIED) {
+      return TRITONSERVER_ErrorNew(
+          TRITONSERVER_ERROR_INTERNAL,
+          (std::string("unsupported datatype ") + io_dtype + " for input '" +
+           io_name + "' for model '" + Name() + "'")
+              .c_str());
+    }
+    RETURN_IF_OPENVINO_ERROR(
+        iit->second->setPrecision(openvino_precision),
+        std::string("setting precision for " + io_name).c_str());
+
+    // If a reshape is provided for the input then use that when
+    // validating that the model matches what is expected.
+    std::vector<int64_t> dims;
+    triton::common::TritonJson::Value reshape;
+    if (io.Find("reshape", &reshape)) {
+      RETURN_IF_ERROR(ParseShape(reshape, "shape", &dims));
+    } else {
+      RETURN_IF_ERROR(ParseShape(io, "dims", &dims));
+    }
+    RETURN_IF_ERROR(CompareDimsSupported(
+        Name(), io_name, iit->second->getTensorDesc().getDims(), dims,
+        MaxBatchSize(), false /* compare_exact */));
+  }
+
+  // Configuring the network to handle the max_batch_size
+  RETURN_IF_OPENVINO_ERROR(
+      SetBatchSize(MaxBatchSize(), &network_), "setting max batch size");
+  return nullptr;  // success
+}
+
+TRITONSERVER_Error*
+ModelState::ValidateOutputs()
+{
+  auto output_tensor_infos{network_.getOutputsInfo()};
+
+  std::set<std::string> output_tensor_names;
+  for (const auto& output_tensor_info : output_tensor_infos) {
+    output_tensor_names.insert(output_tensor_info.first);
+  }
+
+  triton::common::TritonJson::Value ios;
+  RETURN_IF_ERROR(model_config_.MemberAsArray("output", &ios));
+  for (size_t i = 0; i < ios.ArraySize(); i++) {
+    triton::common::TritonJson::Value io;
+    RETURN_IF_ERROR(ios.IndexAsObject(i, &io));
+    std::string io_name;
+    RETURN_IF_ERROR(io.MemberAsString("name", &io_name));
+    std::string io_dtype;
+    RETURN_IF_ERROR(io.MemberAsString("data_type", &io_dtype));
+
+    auto iit = output_tensor_infos.find(io_name);
+    if (iit == output_tensor_infos.end()) {
+      RETURN_IF_ERROR(CheckAllowedModelOutput(io, output_tensor_names));
+    }
+
+    auto openvino_precision = ModelConfigDataTypeToOpenVINOPrecision(io_dtype);
+    if (openvino_precision == InferenceEngine::Precision::UNSPECIFIED) {
+      return TRITONSERVER_ErrorNew(
+          TRITONSERVER_ERROR_INTERNAL,
+          (std::string("unsupported datatype ") + io_dtype + " for input '" +
+           io_name + "' for model '" + Name() + "'")
+              .c_str());
+    }
+    RETURN_IF_OPENVINO_ERROR(
+        iit->second->setPrecision(openvino_precision),
+        std::string("setting precision for " + io_name).c_str());
+
+    // If a reshape is provided for the input then use that when
+    // validating that the model matches what is expected.
+    std::vector<int64_t> dims;
+    triton::common::TritonJson::Value reshape;
+    if (io.Find("reshape", &reshape)) {
+      RETURN_IF_ERROR(ParseShape(reshape, "shape", &dims));
+    } else {
+      RETURN_IF_ERROR(ParseShape(io, "dims", &dims));
+    }
+    RETURN_IF_ERROR(CompareDimsSupported(
+        Name(), io_name, iit->second->getTensorDesc().getDims(), dims,
+        MaxBatchSize(), true /* compare_exact */));
+  }
+
+  return nullptr;  // success
 }
 
 TRITONSERVER_Error*
@@ -244,10 +554,6 @@ class ModelInstanceState : public BackendModelInstance {
   ModelInstanceState(
       ModelState* model_state,
       TRITONBACKEND_ModelInstance* triton_model_instance);
-
-  TRITONSERVER_Error* ValidateConfigureNetwork();
-  TRITONSERVER_Error* ValidateInputs(const size_t expected_input_cnt);
-  TRITONSERVER_Error* ValidateOutputs();
 
   TRITONSERVER_Error* SetBatch(const int batch_size);
   TRITONSERVER_Error* Infer(
@@ -304,13 +610,13 @@ ModelInstanceState::ModelInstanceState(
             .c_str()));
   }
 
-  if (model_state->NetworkNotRead()) {
+  if (model_state_->NetworkNotRead()) {
     THROW_IF_BACKEND_INSTANCE_ERROR(
         model_state_->ReadNetwork(ArtifactFilename(), &model_path_));
-    THROW_IF_BACKEND_INSTANCE_ERROR(ValidateConfigureNetwork());
+    THROW_IF_BACKEND_INSTANCE_ERROR(model_state_->ValidateConfigureNetwork());
   }
 
-  if (model_state->NetworkNotLoaded(device_)) {
+  if (model_state_->NetworkNotLoaded(device_)) {
     // enable dynamic batching in the network
     std::map<std::string, std::string> network_config;
     if (model_state_->MaxBatchSize() != 0) {
@@ -319,148 +625,11 @@ ModelInstanceState::ModelInstanceState(
               InferenceEngine::PluginConfigParams::YES;
     }
     THROW_IF_BACKEND_INSTANCE_ERROR(
-        model_state->LoadNetwork(device_, network_config));
+        model_state_->LoadNetwork(device_, network_config));
   }
 
   THROW_IF_BACKEND_INSTANCE_ERROR(
-      model_state->CreateInferRequest(device_, &infer_request_));
-}
-
-TRITONSERVER_Error*
-ModelInstanceState::ValidateConfigureNetwork()
-{
-  size_t expected_input_cnt = 0;
-  {
-    triton::common::TritonJson::Value inputs;
-    if (model_state_->ModelConfig().Find("input", &inputs)) {
-      expected_input_cnt = inputs.ArraySize();
-    }
-  }
-
-  RETURN_IF_ERROR(ValidateInputs(expected_input_cnt));
-  RETURN_IF_ERROR(ValidateOutputs());
-
-  return nullptr;  // success
-}
-
-TRITONSERVER_Error*
-ModelInstanceState::ValidateInputs(const size_t expected_input_cnt)
-{
-  auto input_tensor_infos{model_state_->Network()->getInputsInfo()};
-  if (input_tensor_infos.size() != expected_input_cnt) {
-    return TRITONSERVER_ErrorNew(
-        TRITONSERVER_ERROR_INVALID_ARG,
-        (std::string("unable to load model '") + model_state_->Name() +
-         "', configuration expects " + std::to_string(expected_input_cnt) +
-         " inputs, model provides " + std::to_string(input_tensor_infos.size()))
-            .c_str());
-  }
-
-  std::set<std::string> input_tensor_names;
-  for (const auto& input_tensor_info : input_tensor_infos) {
-    input_tensor_names.insert(input_tensor_info.first);
-  }
-
-  triton::common::TritonJson::Value ios;
-  RETURN_IF_ERROR(model_state_->ModelConfig().MemberAsArray("input", &ios));
-  for (size_t i = 0; i < ios.ArraySize(); i++) {
-    triton::common::TritonJson::Value io;
-    RETURN_IF_ERROR(ios.IndexAsObject(i, &io));
-    std::string io_name;
-    RETURN_IF_ERROR(io.MemberAsString("name", &io_name));
-    std::string io_dtype;
-    RETURN_IF_ERROR(io.MemberAsString("data_type", &io_dtype));
-
-    auto iit = input_tensor_infos.find(io_name);
-    if (iit == input_tensor_infos.end()) {
-      RETURN_IF_ERROR(CheckAllowedModelInput(io, input_tensor_names));
-    }
-
-    auto openvino_precision = ModelConfigDataTypeToOpenVINOPrecision(io_dtype);
-    if (openvino_precision == InferenceEngine::Precision::UNSPECIFIED) {
-      return TRITONSERVER_ErrorNew(
-          TRITONSERVER_ERROR_INTERNAL,
-          (std::string("unsupported datatype ") + io_dtype + " for input '" +
-           io_name + "' for model '" + model_state_->Name() + "'")
-              .c_str());
-    }
-    RETURN_IF_OPENVINO_ERROR(
-        iit->second->setPrecision(openvino_precision),
-        std::string("setting precision for " + io_name).c_str());
-
-    // If a reshape is provided for the input then use that when
-    // validating that the model matches what is expected.
-    std::vector<int64_t> dims;
-    triton::common::TritonJson::Value reshape;
-    if (io.Find("reshape", &reshape)) {
-      RETURN_IF_ERROR(ParseShape(reshape, "shape", &dims));
-    } else {
-      RETURN_IF_ERROR(ParseShape(io, "dims", &dims));
-    }
-    RETURN_IF_ERROR(CompareDimsSupported(
-        model_state_->Name(), io_name, iit->second->getTensorDesc().getDims(),
-        dims, model_state_->MaxBatchSize(), false /* compare_exact */));
-  }
-
-  // Configuring the network to handle the max_batch_size
-  RETURN_IF_OPENVINO_ERROR(
-      SetBatchSize(model_state_->MaxBatchSize(), model_state_->Network()),
-      "setting max batch size");
-  return nullptr;  // success
-}
-
-TRITONSERVER_Error*
-ModelInstanceState::ValidateOutputs()
-{
-  auto output_tensor_infos{model_state_->Network()->getOutputsInfo()};
-
-  std::set<std::string> output_tensor_names;
-  for (const auto& output_tensor_info : output_tensor_infos) {
-    output_tensor_names.insert(output_tensor_info.first);
-  }
-
-  triton::common::TritonJson::Value ios;
-  RETURN_IF_ERROR(model_state_->ModelConfig().MemberAsArray("output", &ios));
-  for (size_t i = 0; i < ios.ArraySize(); i++) {
-    triton::common::TritonJson::Value io;
-    RETURN_IF_ERROR(ios.IndexAsObject(i, &io));
-    std::string io_name;
-    RETURN_IF_ERROR(io.MemberAsString("name", &io_name));
-    std::string io_dtype;
-    RETURN_IF_ERROR(io.MemberAsString("data_type", &io_dtype));
-
-    auto iit = output_tensor_infos.find(io_name);
-    if (iit == output_tensor_infos.end()) {
-      RETURN_IF_ERROR(CheckAllowedModelOutput(io, output_tensor_names));
-    }
-
-    auto openvino_precision = ModelConfigDataTypeToOpenVINOPrecision(io_dtype);
-    if (openvino_precision == InferenceEngine::Precision::UNSPECIFIED) {
-      return TRITONSERVER_ErrorNew(
-          TRITONSERVER_ERROR_INTERNAL,
-          (std::string("unsupported datatype ") + io_dtype + " for input '" +
-           io_name + "' for model '" + model_state_->Name() + "'")
-              .c_str());
-    }
-    RETURN_IF_OPENVINO_ERROR(
-        iit->second->setPrecision(openvino_precision),
-        std::string("setting precision for " + io_name).c_str());
-
-    // If a reshape is provided for the input then use that when
-    // validating that the model matches what is expected.
-    std::vector<int64_t> dims;
-    triton::common::TritonJson::Value reshape;
-    if (io.Find("reshape", &reshape)) {
-      RETURN_IF_ERROR(ParseShape(reshape, "shape", &dims));
-    } else {
-      RETURN_IF_ERROR(ParseShape(io, "dims", &dims));
-    }
-    RETURN_IF_ERROR(CompareDimsSupported(
-        model_state_->Name(), io_name, iit->second->getTensorDesc().getDims(),
-        dims, model_state_->MaxBatchSize(), true /* compare_exact */));
-  }
-
-  return nullptr;  // success
+      model_state_->CreateInferRequest(device_, &infer_request_));
 }
 
 void

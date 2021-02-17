@@ -31,6 +31,17 @@
 namespace triton { namespace backend { namespace openvino {
 
 std::string
+ConvertVersionMapToString(
+    const std::map<std::string, InferenceEngine::Version>& version_map)
+{
+  std::string result;
+  for (const auto& it : version_map) {
+    result += (it.first) + ":" + (it.second.description) + "\n ";
+  }
+  return result;
+}
+
+std::string
 OpenVINOPrecisionToString(InferenceEngine::Precision openvino_precision)
 {
   switch (openvino_precision) {
@@ -313,6 +324,18 @@ CompareDimsSupported(
   return nullptr;  // success
 }
 
+TRITONSERVER_Error*
+ReadParameter(
+    triton::common::TritonJson::Value& params, const std::string& key,
+    std::string* param)
+{
+  triton::common::TritonJson::Value value;
+  RETURN_ERROR_IF_FALSE(
+      params.Find(key.c_str(), &value), TRITONSERVER_ERROR_INVALID_ARG,
+      std::string("model configuration is missing the parameter ") + key);
+  RETURN_IF_ERROR(value.MemberAsString("string_value", param));
+  return nullptr;  // success
+}
 
 void
 SetBatchSize(const size_t batch_size, InferenceEngine::CNNNetwork* network)
