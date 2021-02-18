@@ -38,14 +38,6 @@ questions or report problems in the main Triton [issues
 page](https://github.com/triton-inference-server/server/issues). The backend
 is designed to run models in Intermediate Representation (IR). See [here](https://docs.openvinotoolkit.org/latest/openvino_docs_MO_DG_prepare_model_convert_model_Converting_Model.html) for instruction to convert a model to IR format. The backend is implemented using openVINO C++ API. Auto completion of the model config is not supported in the backend and complete `config.pbtxt` must be provided with the model.
 
-
-Where can I ask general questions about Triton and Triton backends?
-Be sure to read all the information below as well as the [general
-Triton documentation](https://github.com/triton-inference-server/server#triton-inference-server)
-available in the main [server](https://github.com/triton-inference-server/server)
-repo. If you don't find your answer there you can ask questions on the
-main Triton [issues page](https://github.com/triton-inference-server/server/issues).
-
 **Note:** OpenVINO backend is in early stage of developement and is not yet ready for general use.
 
 ## Build the OpenVINO Backend
@@ -73,14 +65,38 @@ but the listed CMake argument can be used to override.
 * triton-inference-server/core: -DTRITON_CORE_REPO_TAG=[tag]
 * triton-inference-server/common: -DTRITON_COMMON_REPO_TAG=[tag]
 
-## Advanced
+## Using the OpenVINO Backend
 
 ### Parameters
 
-The configuration is done through the `config.pbtxt` file. The parameters and their description are as follows.
+Configuration of OpenVINO for a model is done through the Parameters section of the model's 'config.pbtxt' file. The parameters and their description are as follows.
 
 * `CPU_EXTENSION_PATH`: Required for CPU custom layers. Absolute path to a shared library with the kernels implementations.
 * `CPU_THREADS_NUM`: Number of threads to use for inference on the CPU. Should be a non-negative number.
 * `ENFORCE_BF16`: Enforcing of floating point operations execution in bfloat16 precision on platforms with native bfloat16 support. Possible values are `YES` or `NO`.
 * `CPU_BIND_THREAD`: Enable threads->cores (`YES`, default), threads->(NUMA)nodes (`NUMA`) or completely disable (`NO`) CPU threads pinning for CPU-involved inference.
 * `CPU_THROUGHPUT_STREAMS`: Number of streams to use for inference on the CPU. Default value is determined automatically for a device. Please note that although the automatic selection usually provides a reasonable performance, it still may be non-optimal for some cases, especially for very small networks. Also, using nstreams>1 is inherently throughput-oriented option, while for the best-latency estimations the number of streams should be set to 1.
+
+The section of model config file specifying these parameters will look like:
+
+```
+.
+.
+.
+parameters: {
+key: "CPU_THROUGHPUT_STREAMS"
+value: {
+string_value:"auto"
+}
+}
+parameters: {
+key: "CPU_THREADS_NUM"
+value: {
+string_value:"5"
+}
+}
+.
+.
+.
+
+```
