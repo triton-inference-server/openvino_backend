@@ -64,8 +64,7 @@ class ModelState : public BackendModel {
       TRITONBACKEND_Model* triton_model, ModelState** state);
   virtual ~ModelState() = default;
 
-  // Performs initial setups of Inference Engine
-  TRITONSERVER_Error* ConfigureInferenceEngine(const std::string& device);
+  TRITONSERVER_Error* ParseParameters(const std::string& device);
   TRITONSERVER_Error* LoadCpuExtensions(
       triton::common::TritonJson::Value& params);
   TRITONSERVER_Error* ParseParameter(
@@ -73,6 +72,8 @@ class ModelState : public BackendModel {
       std::map<std::string, std::string>* device_config);
   TRITONSERVER_Error* ParseParameterHelper(
       const std::string& mkey, std::string* ov_key, std::string* value);
+
+  TRITONSERVER_Error* ConfigureInferenceEngine();
 
   // Reads the Intermediate Representation(IR) model using `artifact_name`
   // as the name for the model file/directory. Return in `model_path` the
@@ -101,6 +102,7 @@ class ModelState : public BackendModel {
   bool NetworkNotLoaded(const std::string device_);
 
   InferenceEngine::CNNNetwork* Network() { return &network_; }
+  bool SkipDynamicBatchSize() { return skip_dynamic_batchsize_; }
 
  private:
   ModelState(TRITONBACKEND_Model* triton_model);
@@ -112,8 +114,8 @@ class ModelState : public BackendModel {
   std::map<std::string, InferenceEngine::ExecutableNetwork> executable_network_;
   // Maps device to their respective parameters
   std::map<std::string, std::map<std::string, std::string>> config_;
-
   bool network_read_;
+  bool skip_dynamic_batchsize_;
 };
 
 TRITONSERVER_Error*
@@ -150,7 +152,8 @@ ModelState::Create(TRITONBACKEND_Model* triton_model, ModelState** state)
 }
 
 ModelState::ModelState(TRITONBACKEND_Model* triton_model)
-    : BackendModel(triton_model), network_read_(false)
+    : BackendModel(triton_model), network_read_(false),
+      skip_dynamic_batchsize_(false)
 {
 }
 
@@ -191,11 +194,19 @@ ModelState::ReadNetwork(
 }
 
 TRITONSERVER_Error*
-ModelState::ConfigureInferenceEngine(const std::string& device)
+ModelState::ParseParameters(const std::string& device)
 {
   // Validate and set parameters
   triton::common::TritonJson::Value params;
   bool status = model_config_.Find("parameters", &params);
+  std::string value;
+  ReadParameter(params, "SKIP_OV_DYNAMIC_BATCHSIZE", &(value));
+  std::transform(
+      value.begin(), value.end(), value.begin(),
+      [](unsigned char c) { return std::tolower(c); });
+  if (value.compare("yes") == 0) {
+    skip_dynamic_batchsize_ = true;
+  }
   if (status) {
     if (device == "CPU") {
       RETURN_IF_ERROR(LoadCpuExtensions(params));
@@ -209,11 +220,6 @@ ModelState::ConfigureInferenceEngine(const std::string& device)
       RETURN_IF_ERROR(
           ParseParameter("CPU_THROUGHPUT_STREAMS", params, &device_config));
     }
-  }
-  for (auto&& item : config_) {
-    RETURN_IF_OPENVINO_ERROR(
-        inference_engine_.SetConfig(item.second, item.first),
-        "configuring inference engine");
   }
 
   return nullptr;
@@ -326,6 +332,18 @@ ModelState::ParseParameterHelper(
 }
 
 TRITONSERVER_Error*
+ModelState::ConfigureInferenceEngine()
+{
+  for (auto&& item : config_) {
+    RETURN_IF_OPENVINO_ERROR(
+        inference_engine_.SetConfig(item.second, item.first),
+        "configuring inference engine");
+  }
+
+  return nullptr;
+}
+
+TRITONSERVER_Error*
 ModelState::LoadNetwork(
     const std::string& device,
     const std::map<std::string, std::string> network_config)
@@ -334,8 +352,6 @@ ModelState::LoadNetwork(
       NetworkNotLoaded(device), TRITONSERVER_ERROR_INTERNAL,
       std::string("attempt to load model '") + Name() + "' on device '" +
           device + "' more than once");
-
-  RETURN_IF_ERROR(ConfigureInferenceEngine(device));
 
   LOG_MESSAGE(
       TRITONSERVER_LOG_VERBOSE,
@@ -617,13 +633,16 @@ ModelInstanceState::ModelInstanceState(
   }
 
   if (model_state_->NetworkNotLoaded(device_)) {
+    THROW_IF_BACKEND_INSTANCE_ERROR(model_state_->ParseParameters(device_));
     // enable dynamic batching in the network
     std::map<std::string, std::string> network_config;
-    if (model_state_->MaxBatchSize() != 0) {
+    if ((model_state_->MaxBatchSize() != 0) &&
+        (!model_state_->SkipDynamicBatchSize())) {
       network_config
           [InferenceEngine::PluginConfigParams::KEY_DYN_BATCH_ENABLED] =
               InferenceEngine::PluginConfigParams::YES;
     }
+    THROW_IF_BACKEND_INSTANCE_ERROR(model_state_->ConfigureInferenceEngine());
     THROW_IF_BACKEND_INSTANCE_ERROR(
         model_state_->LoadNetwork(device_, network_config));
   }
@@ -775,10 +794,12 @@ ModelInstanceState::ProcessRequests(
   uint64_t compute_start_ns = 0;
   SET_TIMESTAMP(compute_start_ns);
 
-  // Sets the new batch size before issuing the inference.
-  if (max_batch_size != 0) {
-    RESPOND_ALL_AND_RETURN_IF_ERROR(
-        &responses, request_count, SetBatch(total_batch_size));
+  if (!model_state_->SkipDynamicBatchSize()) {
+    // Sets the new batch size before issuing the inference.
+    if (max_batch_size != 0) {
+      RESPOND_ALL_AND_RETURN_IF_ERROR(
+          &responses, request_count, SetBatch(total_batch_size));
+    }
   }
 
   // Run...
