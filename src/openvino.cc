@@ -95,7 +95,8 @@ class ModelState : public BackendModel {
   TRITONSERVER_Error* CreateInferRequest(
       const std::string& device, InferenceEngine::InferRequest* infer_request);
 
-  TRITONSERVER_Error* GetInputsInfo(InferenceEngine::InputsDataMap* input_tensor_infos);
+  TRITONSERVER_Error* GetInputsInfo(
+      InferenceEngine::InputsDataMap* input_tensor_infos);
 
   // Whether or not the network is read successfully
   bool NetworkNotRead();
@@ -538,10 +539,10 @@ ModelState::ValidateOutputs()
 }
 
 TRITONSERVER_Error*
-ModelState::GetInputsInfo(InferenceEngine::InputsDataMap* input_tensor_infos) {
-RETURN_IF_OPENVINO_ASSIGN_ERROR(
-      *input_tensor_infos, network_.getInputsInfo(),
-      "getting input infos");
+ModelState::GetInputsInfo(InferenceEngine::InputsDataMap* input_tensor_infos)
+{
+  RETURN_IF_OPENVINO_ASSIGN_ERROR(
+      *input_tensor_infos, network_.getInputsInfo(), "getting input infos");
 
   return nullptr;
 }
@@ -902,7 +903,9 @@ ModelInstanceState::SetInputTensors(
       TRITONBACKEND_RequestInputCount(requests[0], &input_count));
 
   InferenceEngine::InputsDataMap input_tensor_infos;
-  RESPOND_ALL_AND_RETURN_IF_ERROR(responses, request_count, model_state_->GetInputsInfo(&input_tensor_infos));
+  RESPOND_ALL_AND_RETURN_IF_ERROR(
+      responses, request_count,
+      model_state_->GetInputsInfo(&input_tensor_infos));
 
   for (uint32_t input_idx = 0; input_idx < input_count; input_idx++) {
     TRITONBACKEND_Input* input;
