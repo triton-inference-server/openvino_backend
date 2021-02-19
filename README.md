@@ -76,7 +76,7 @@ Configuration of OpenVINO for a model is done through the Parameters section of 
 * `ENFORCE_BF16`: Enforcing of floating point operations execution in bfloat16 precision on platforms with native bfloat16 support. Possible values are `YES` or `NO`.
 * `CPU_BIND_THREAD`: Enable threads->cores (`YES`, default), threads->(NUMA)nodes (`NUMA`) or completely disable (`NO`) CPU threads pinning for CPU-involved inference.
 * `CPU_THROUGHPUT_STREAMS`: Number of streams to use for inference on the CPU. Default value is determined automatically for a device. Please note that although the automatic selection usually provides a reasonable performance, it still may be non-optimal for some cases, especially for very small networks. Also, using nstreams>1 is inherently throughput-oriented option, while for the best-latency estimations the number of streams should be set to 1.
-* `SKIP_DYNAMIC_BATCHSIZE`: The topology of some models do not support openVINO dynamic batch sizes. Set the value of this parameter to `YES`, in order
+* `SKIP_OV_DYNAMIC_BATCHSIZE `: The topology of some models do not support openVINO dynamic batch sizes. Set the value of this parameter to `YES`, in order
 to skip the dynamic batch sizes in backend. Note, the model will only support the batch size specified as `max_batch_size` field in the config. By default, dynamic batch sizes will be attempted when non-zero `max_batch_size` is provided.
 
 The section of model config file specifying these parameters will look like:
