@@ -107,4 +107,4 @@ string_value:"5"
 
 * When loading OV models in batching mode (`max_batch_size > 0`), segmentation fault might be encountered. Only requests with exact batch size as the one specified in `max_batch_size` is observed to be successful. Related issue from openVINO is [here](https://community.intel.com/t5/Intel-Distribution-of-OpenVINO/Allowed-batch-size-for-Dynamic-Batch-Size-confusing/td-p/1186265).
 
-* Segmentation fault in openVINO library during the clean-up of the backend.
+* The backend needs to be loaded in Triton in persistent mode, otherwise it might lead to segmentation fault while unloading.
