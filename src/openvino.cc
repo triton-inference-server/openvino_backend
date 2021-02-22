@@ -694,8 +694,7 @@ ModelInstanceState::ProcessRequests(
           TRITONSERVER_ErrorNew(
               TRITONSERVER_ERROR_INTERNAL,
               std::string(
-                  "null request given to ONNX Runtime backend for '" + Name() +
-                  "'")
+                  "null request given to openVINO backend for '" + Name() + "'")
                   .c_str()));
       return;
     }
@@ -714,6 +713,20 @@ ModelInstanceState::ProcessRequests(
       }
       if (err != nullptr) {
         RequestsRespondWithError(requests, request_count, err);
+        return;
+      }
+      // FIXME: The OV will segfault when the batch size is not equal to the max
+      // batch size.
+      if (total_batch_size != (size_t)max_batch_size) {
+        RequestsRespondWithError(
+            requests, request_count,
+            TRITONSERVER_ErrorNew(
+                TRITONSERVER_ERROR_INTERNAL,
+                std::string(
+                    "expected requests with batch size '" +
+                    std::to_string(max_batch_size) + "', got '" +
+                    std::to_string(total_batch_size) + "'")
+                    .c_str()));
         return;
       }
     } else {
@@ -839,7 +852,7 @@ ModelInstanceState::ProcessRequests(
       LOG_IF_ERROR(
           TRITONBACKEND_ResponseSend(
               response, TRITONSERVER_RESPONSE_COMPLETE_FINAL, nullptr),
-          "failed to send onnxruntime backend response");
+          "failed to send openvino backend response");
     }
   }
 
