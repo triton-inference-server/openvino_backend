@@ -64,6 +64,7 @@ class ModelState : public BackendModel {
       TRITONBACKEND_Model* triton_model, ModelState** state);
   virtual ~ModelState() = default;
 
+  TRITONSERVER_Error* PrintModelConfig();
   TRITONSERVER_Error* ParseParameters(const std::string& device);
   TRITONSERVER_Error* LoadCpuExtensions(
       triton::common::TritonJson::Value& params);
@@ -158,6 +159,19 @@ ModelState::ModelState(TRITONBACKEND_Model* triton_model)
     : BackendModel(triton_model), network_read_(false),
       skip_dynamic_batchsize_(false)
 {
+}
+
+TRITONSERVER_Error*
+ModelState::PrintModelConfig()
+{
+  // We have the json DOM for the model configuration...
+  common::TritonJson::WriteBuffer buffer;
+  RETURN_IF_ERROR(model_config_.PrettyWrite(&buffer));
+  LOG_MESSAGE(
+      TRITONSERVER_LOG_INFO,
+      (std::string("model configuration:\n") + buffer.Contents()).c_str());
+
+  return nullptr;  // success
 }
 
 TRITONSERVER_Error*
@@ -1087,6 +1101,8 @@ TRITONBACKEND_ModelInitialize(TRITONBACKEND_Model* model)
   RETURN_IF_ERROR(ModelState::Create(model, &model_state));
   RETURN_IF_ERROR(
       TRITONBACKEND_ModelSetState(model, reinterpret_cast<void*>(model_state)));
+
+  RETURN_IF_ERROR(model_state->PrintModelConfig());
 
   return nullptr;  // success
 }
