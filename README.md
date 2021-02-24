@@ -77,7 +77,8 @@ Configuration of OpenVINO for a model is done through the Parameters section of 
 * `CPU_BIND_THREAD`: Enable threads->cores (`YES`, default), threads->(NUMA)nodes (`NUMA`) or completely disable (`NO`) CPU threads pinning for CPU-involved inference.
 * `CPU_THROUGHPUT_STREAMS`: Number of streams to use for inference on the CPU. Default value is determined automatically for a device. Please note that although the automatic selection usually provides a reasonable performance, it still may be non-optimal for some cases, especially for very small networks. Also, using nstreams>1 is inherently throughput-oriented option, while for the best-latency estimations the number of streams should be set to 1.
 * `SKIP_OV_DYNAMIC_BATCHSIZE `: The topology of some models do not support openVINO dynamic batch sizes. Set the value of this parameter to `YES`, in order
-to skip the dynamic batch sizes in backend. Note, the model will only support the batch size specified as `max_batch_size` field in the config. By default, dynamic batch sizes will be attempted when non-zero `max_batch_size` is provided.
+to skip the dynamic batch sizes in backend. 
+* `ENABLE_BATCH_PADDING `: By default an error will be generated if backend receives a request with batch size less than max_batch_size specified in the configuration. This error can be avoided at a cost of performance by specifying `ENABLE_BATCH_PADDING` parameter as `YES`.
 
 The section of model config file specifying these parameters will look like:
 
@@ -105,6 +106,6 @@ string_value:"5"
 
 ## Known Issues
 
-* When loading OV models in batching mode (`max_batch_size > 0`), segmentation fault might be encountered. Only requests with exact batch size as the one specified in `max_batch_size` is observed to be successful. Related issue from openVINO is [here](https://community.intel.com/t5/Intel-Distribution-of-OpenVINO/Allowed-batch-size-for-Dynamic-Batch-Size-confusing/td-p/1186265).
+* Not all models support dynamic batch sizes.
 
 * The backend needs to be loaded in Triton in persistent mode, otherwise it might lead to segmentation fault while unloading.
