@@ -68,6 +68,9 @@ class ModelState : public BackendModel {
   TRITONSERVER_Error* ParseParameters(const std::string& device);
   TRITONSERVER_Error* LoadCpuExtensions(
       triton::common::TritonJson::Value& params);
+  TRITONSERVER_Error* ParseBoolParameter(
+      const std::string& mkey, triton::common::TritonJson::Value& params,
+      bool* setting);
   TRITONSERVER_Error* ParseParameter(
       const std::string& mkey, triton::common::TritonJson::Value& params,
       std::map<std::string, std::string>* device_config);
@@ -107,6 +110,7 @@ class ModelState : public BackendModel {
 
   InferenceEngine::CNNNetwork* Network() { return &network_; }
   bool SkipDynamicBatchSize() { return skip_dynamic_batchsize_; }
+  bool EnableBatchPadding() { return enable_padding_; }
 
  private:
   ModelState(TRITONBACKEND_Model* triton_model);
@@ -120,6 +124,7 @@ class ModelState : public BackendModel {
   std::map<std::string, std::map<std::string, std::string>> config_;
   bool network_read_;
   bool skip_dynamic_batchsize_;
+  bool enable_padding_;
 };
 
 TRITONSERVER_Error*
@@ -157,7 +162,7 @@ ModelState::Create(TRITONBACKEND_Model* triton_model, ModelState** state)
 
 ModelState::ModelState(TRITONBACKEND_Model* triton_model)
     : BackendModel(triton_model), network_read_(false),
-      skip_dynamic_batchsize_(false)
+      skip_dynamic_batchsize_(false), enable_padding_(false)
 {
 }
 
@@ -216,14 +221,10 @@ ModelState::ParseParameters(const std::string& device)
   // Validate and set parameters
   triton::common::TritonJson::Value params;
   bool status = model_config_.Find("parameters", &params);
-  std::string value;
-  ReadParameter(params, "SKIP_OV_DYNAMIC_BATCHSIZE", &(value));
-  std::transform(
-      value.begin(), value.end(), value.begin(),
-      [](unsigned char c) { return std::tolower(c); });
-  if (value.compare("yes") == 0) {
-    skip_dynamic_batchsize_ = true;
-  }
+  RETURN_IF_ERROR(ParseBoolParameter(
+      "SKIP_OV_DYNAMIC_BATCHSIZE", params, &skip_dynamic_batchsize_));
+  RETURN_IF_ERROR(
+      ParseBoolParameter("ENABLE_BATCH_PADDING", params, &enable_padding_));
   if (status) {
     if (device == "CPU") {
       RETURN_IF_ERROR(LoadCpuExtensions(params));
@@ -260,6 +261,24 @@ ModelState::LoadCpuExtensions(triton::common::TritonJson::Value& params)
         TRITONSERVER_LOG_INFO,
         (std::string("CPU (MKLDNN) extensions is loaded") + cpu_ext_path)
             .c_str());
+  }
+
+  return nullptr;
+}
+
+
+TRITONSERVER_Error*
+ModelState::ParseBoolParameter(
+    const std::string& mkey, triton::common::TritonJson::Value& params,
+    bool* setting)
+{
+  std::string value;
+  ReadParameter(params, mkey, &(value));
+  std::transform(
+      value.begin(), value.end(), value.begin(),
+      [](unsigned char c) { return std::tolower(c); });
+  if (value.compare("yes") == 0) {
+    *setting = true;
   }
 
   return nullptr;
@@ -734,7 +753,23 @@ ModelInstanceState::ProcessRequests(
         return;
       }
       if (total_batch_size != (size_t)max_batch_size) {
-        batch_pad_size_ = max_batch_size - total_batch_size;
+        if (model_state_->EnableBatchPadding()) {
+          batch_pad_size_ = max_batch_size - total_batch_size;
+        } else {
+          RequestsRespondWithError(
+              requests, request_count,
+              TRITONSERVER_ErrorNew(
+                  TRITONSERVER_ERROR_INTERNAL,
+                  std::string(
+                      "expected requests with batch size '" +
+                      std::to_string(max_batch_size) + "', got '" +
+                      std::to_string(total_batch_size) +
+                      "'... this error can be avoided by setting "
+                      "'ENABLE_BATCH_PADDING' parameter in model configuration "
+                      "to 'YES' at a performance cost.")
+                      .c_str()));
+          return;
+        }
       }
     } else {
       total_batch_size += 1;
