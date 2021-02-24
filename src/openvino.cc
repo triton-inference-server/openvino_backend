@@ -614,6 +614,8 @@ class ModelInstanceState : public BackendModelInstance {
       size_t total_batch_size, const std::vector<const char*>& output_names,
       TRITONBACKEND_Request** requests, const uint32_t request_count,
       std::vector<TRITONBACKEND_Response*>* responses);
+  TRITONSERVER_Error* ValidateOutputBatchSize(
+      std::vector<int64_t>* output_shape);
 
   ModelState* model_state_;
 
@@ -622,6 +624,8 @@ class ModelInstanceState : public BackendModelInstance {
 
   std::string device_;
   InferenceEngine::InferRequest infer_request_;
+
+  size_t batch_pad_size_;
 };
 
 TRITONSERVER_Error*
@@ -645,7 +649,7 @@ ModelInstanceState::Create(
 ModelInstanceState::ModelInstanceState(
     ModelState* model_state, TRITONBACKEND_ModelInstance* triton_model_instance)
     : BackendModelInstance(model_state, triton_model_instance),
-      model_state_(model_state), device_("CPU")
+      model_state_(model_state), device_("CPU"), batch_pad_size_(0)
 {
   if (Kind() != TRITONSERVER_INSTANCEGROUPKIND_CPU) {
     throw triton::backend::BackendModelInstanceException(TRITONSERVER_ErrorNew(
@@ -729,19 +733,8 @@ ModelInstanceState::ProcessRequests(
         RequestsRespondWithError(requests, request_count, err);
         return;
       }
-      // FIXME: The OV will segfault when the batch size is not equal to the max
-      // batch size.
       if (total_batch_size != (size_t)max_batch_size) {
-        RequestsRespondWithError(
-            requests, request_count,
-            TRITONSERVER_ErrorNew(
-                TRITONSERVER_ERROR_INTERNAL,
-                std::string(
-                    "expected requests with batch size '" +
-                    std::to_string(max_batch_size) + "', got '" +
-                    std::to_string(total_batch_size) + "'")
-                    .c_str()));
-        return;
+        batch_pad_size_ = max_batch_size - total_batch_size;
       }
     } else {
       total_batch_size += 1;
@@ -796,6 +789,14 @@ ModelInstanceState::ProcessRequests(
     }
   }
 
+  if (!model_state_->SkipDynamicBatchSize()) {
+    // Sets the new batch size before issuing the inference.
+    if (max_batch_size != 0) {
+      RESPOND_ALL_AND_RETURN_IF_ERROR(
+          &responses, request_count, SetBatch(total_batch_size));
+    }
+  }
+
   std::vector<const char*> input_names;
   bool cuda_copy = false;
   BackendInputCollector collector(
@@ -835,14 +836,6 @@ ModelInstanceState::ProcessRequests(
 
   uint64_t compute_start_ns = 0;
   SET_TIMESTAMP(compute_start_ns);
-
-  if (!model_state_->SkipDynamicBatchSize()) {
-    // Sets the new batch size before issuing the inference.
-    if (max_batch_size != 0) {
-      RESPOND_ALL_AND_RETURN_IF_ERROR(
-          &responses, request_count, SetBatch(total_batch_size));
-    }
-  }
 
   // Run...
   RESPOND_ALL_AND_RETURN_IF_ERROR(
@@ -973,16 +966,33 @@ ModelInstanceState::SetInputTensors(
     TRITONSERVER_MemoryType input_memtype = input_memory->MemoryType();
     char* input_buffer = input_memory->MemoryPtr();
 
-    // Set the input blob to the buffer without allocating any new memory
-    InferenceEngine::Blob::Ptr data_blob{WrapInputBufferToBlob(
-        input_tensor_infos[input_name]->getTensorDesc(), input_buffer)};
-
-    RESPOND_ALL_AND_RETURN_IF_OPENVINO_ERROR(
-        responses, request_count, infer_request_.SetBlob(input_name, data_blob),
-        "setting the input tensor data");
-
     collector->ProcessTensor(
         input_name, input_buffer, batchn_byte_size, input_memtype, 0);
+
+    if (batch_pad_size_ == 0) {
+      // Set the input blob to the buffer without allocating any new memory
+      auto data_blob = WrapInputBufferToBlob(
+          input_tensor_infos[input_name]->getTensorDesc(), input_buffer);
+      RESPOND_ALL_AND_RETURN_IF_OPENVINO_ERROR(
+          responses, request_count,
+          infer_request_.SetBlob(input_name, data_blob),
+          "setting the input tensor data");
+    } else {
+      // In addition to extra compute for padding, data copy is required hence
+      // will be inefficient.
+      auto data_blob = infer_request_.GetBlob(input_name);
+      if ((size_t)batchn_byte_size != data_blob->byteSize()) {
+        LOG_MESSAGE(
+            TRITONSERVER_LOG_VERBOSE,
+            (std::string("padding input with ") +
+             std::to_string(batch_pad_size_) +
+             " additional batches to match max_batch_size, send requests with "
+             "batch_size equal to max_batch_size for better performance.")
+                .c_str());
+      }
+      auto dest = (data_blob->buffer()).as<char*>();
+      memcpy(dest, input_buffer, batchn_byte_size);
+    }
   }
 
   // Finalize...
@@ -1011,6 +1021,9 @@ ModelInstanceState::ReadOutputTensors(
     auto output_shape =
         ConvertToSignedShape(output_blob->getTensorDesc().getDims());
 
+    RESPOND_ALL_AND_RETURN_IF_ERROR(
+        responses, request_count, ValidateOutputBatchSize(&output_shape));
+
     auto const mem_locker = output_blob->cbuffer();
     responder.ProcessTensor(
         name,
@@ -1021,6 +1034,28 @@ ModelInstanceState::ReadOutputTensors(
 
   // Finalize and wait for any pending buffer copies.
   cuda_copy |= responder.Finalize();
+}
+
+TRITONSERVER_Error*
+ModelInstanceState::ValidateOutputBatchSize(std::vector<int64_t>* output_shape)
+{
+  auto mbs = model_state_->MaxBatchSize();
+  if (mbs == 0) {
+    return nullptr;
+  } else if (
+      ((*output_shape)[0] != mbs) &&
+      ((size_t)(*output_shape)[0] != (mbs - batch_pad_size_))) {
+    return TRITONSERVER_ErrorNew(
+        TRITONSERVER_ERROR_INTERNAL,
+        (std::string(
+             "expected the batch size of openvino model output to be ") +
+         std::to_string(mbs) + ", got " + std::to_string((*output_shape)[0]))
+            .c_str());
+  }
+
+  (*output_shape)[0] = mbs - batch_pad_size_;
+
+  return nullptr;
 }
 
 /////////////
