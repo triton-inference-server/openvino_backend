@@ -167,6 +167,7 @@ bool AdjustShapesBatch(
 std::vector<int64_t> ConvertToSignedShape(const std::vector<size_t> shape);
 
 InferenceEngine::Blob::Ptr WrapInputBufferToBlob(
-    const InferenceEngine::TensorDesc& tensor_desc, char* input_buffer);
+    const InferenceEngine::TensorDesc& tensor_desc, char* input_buffer,
+    size_t input_buffer_size = 0);
 
 }}}  // namespace triton::backend::openvino

@@ -999,15 +999,16 @@ ModelInstanceState::SetInputTensors(
             0 /* memory_type_id */, batchn_byte_size, &input_memory));
 
     TRITONSERVER_MemoryType input_memtype = input_memory->MemoryType();
-    char* input_buffer = input_memory->MemoryPtr();
+    char* input_buffer_ptr = input_memory->MemoryPtr();
 
     collector->ProcessTensor(
-        input_name, input_buffer, batchn_byte_size, input_memtype, 0);
+        input_name, input_buffer_ptr, batchn_byte_size, input_memtype, 0);
 
     if (batch_pad_size_ == 0) {
       // Set the input blob to the buffer without allocating any new memory
       auto data_blob = WrapInputBufferToBlob(
-          input_tensor_infos[input_name]->getTensorDesc(), input_buffer);
+          input_tensor_infos[input_name]->getTensorDesc(), input_buffer_ptr,
+          batchn_byte_size);
       RESPOND_ALL_AND_RETURN_IF_OPENVINO_ERROR(
           responses, request_count,
           infer_request_.SetBlob(input_name, data_blob),
@@ -1026,7 +1027,7 @@ ModelInstanceState::SetInputTensors(
                 .c_str());
       }
       auto dest = (data_blob->buffer()).as<char*>();
-      memcpy(dest, input_buffer, batchn_byte_size);
+      memcpy(dest, input_buffer_ptr, batchn_byte_size);
     }
   }
 
