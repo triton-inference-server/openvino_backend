@@ -395,39 +395,50 @@ ConvertToSignedShape(const std::vector<size_t> shape)
 
 InferenceEngine::Blob::Ptr
 WrapInputBufferToBlob(
-    const InferenceEngine::TensorDesc& tensor_desc, char* input_buffer)
+    const InferenceEngine::TensorDesc& tensor_desc, char* input_buffer_ptr,
+    size_t input_buffer_size)
 {
   auto precision{tensor_desc.getPrecision()};
   if (precision == InferenceEngine::Precision::BOOL) {
     return InferenceEngine::make_shared_blob<bool>(
-        tensor_desc, reinterpret_cast<bool*>(input_buffer));
+        tensor_desc, reinterpret_cast<bool*>(input_buffer_ptr),
+        input_buffer_size);
   } else if (precision == InferenceEngine::Precision::U8) {
     return InferenceEngine::make_shared_blob<uint8_t>(
-        tensor_desc, reinterpret_cast<uint8_t*>(input_buffer));
+        tensor_desc, reinterpret_cast<uint8_t*>(input_buffer_ptr),
+        input_buffer_size);
   } else if (precision == InferenceEngine::Precision::U16) {
     return InferenceEngine::make_shared_blob<uint16_t>(
-        tensor_desc, reinterpret_cast<uint16_t*>(input_buffer));
+        tensor_desc, reinterpret_cast<uint16_t*>(input_buffer_ptr),
+        input_buffer_size);
   } else if (precision == InferenceEngine::Precision::U32) {
     return InferenceEngine::make_shared_blob<uint32_t>(
-        tensor_desc, reinterpret_cast<uint32_t*>(input_buffer));
+        tensor_desc, reinterpret_cast<uint32_t*>(input_buffer_ptr),
+        input_buffer_size);
   } else if (precision == InferenceEngine::Precision::U64) {
     return InferenceEngine::make_shared_blob<uint64_t>(
-        tensor_desc, reinterpret_cast<uint64_t*>(input_buffer));
+        tensor_desc, reinterpret_cast<uint64_t*>(input_buffer_ptr),
+        input_buffer_size);
   } else if (precision == InferenceEngine::Precision::I8) {
     return InferenceEngine::make_shared_blob<int8_t>(
-        tensor_desc, reinterpret_cast<int8_t*>(input_buffer));
+        tensor_desc, reinterpret_cast<int8_t*>(input_buffer_ptr),
+        input_buffer_size);
   } else if (precision == InferenceEngine::Precision::I16) {
     return InferenceEngine::make_shared_blob<int16_t>(
-        tensor_desc, reinterpret_cast<int16_t*>(input_buffer));
+        tensor_desc, reinterpret_cast<int16_t*>(input_buffer_ptr),
+        input_buffer_size);
   } else if (precision == InferenceEngine::Precision::I32) {
     return InferenceEngine::make_shared_blob<int32_t>(
-        tensor_desc, reinterpret_cast<int32_t*>(input_buffer));
+        tensor_desc, reinterpret_cast<int32_t*>(input_buffer_ptr),
+        input_buffer_size);
   } else if (precision == InferenceEngine::Precision::I64) {
     return InferenceEngine::make_shared_blob<int64_t>(
-        tensor_desc, reinterpret_cast<int64_t*>(input_buffer));
+        tensor_desc, reinterpret_cast<int64_t*>(input_buffer_ptr),
+        input_buffer_size);
   } else {
     return InferenceEngine::make_shared_blob<float>(
-        tensor_desc, reinterpret_cast<float*>(input_buffer));
+        tensor_desc, reinterpret_cast<float*>(input_buffer_ptr),
+        input_buffer_size);
   }
 }
 
