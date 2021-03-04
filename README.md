@@ -30,6 +30,10 @@
 
 # OpenVINO Backend
 
+**Note: OpenVINO backend is beta quality. As a result you may
+encounter performance and functional issues that will be resolved in
+future releases.**
+
 The Triton backend for the
 [OpenVINO](https://docs.openvinotoolkit.org/latest/index.html). You
 can learn more about Triton backends in the [backend
@@ -37,8 +41,6 @@ repo](https://github.com/triton-inference-server/backend).  Ask
 questions or report problems in the main Triton [issues
 page](https://github.com/triton-inference-server/server/issues). The backend
 is designed to run models in Intermediate Representation (IR). See [here](https://docs.openvinotoolkit.org/latest/openvino_docs_MO_DG_prepare_model_convert_model_Converting_Model.html) for instruction to convert a model to IR format. The backend is implemented using openVINO C++ API. Auto completion of the model config is not supported in the backend and complete `config.pbtxt` must be provided with the model.
-
-**Note:** OpenVINO backend is in early stage of developement and is not yet ready for general use.
 
 ## Build the OpenVINO Backend
 
@@ -77,7 +79,7 @@ Configuration of OpenVINO for a model is done through the Parameters section of 
 * `CPU_BIND_THREAD`: Enable threads->cores (`YES`, default), threads->(NUMA)nodes (`NUMA`) or completely disable (`NO`) CPU threads pinning for CPU-involved inference.
 * `CPU_THROUGHPUT_STREAMS`: Number of streams to use for inference on the CPU. Default value is determined automatically for a device. Please note that although the automatic selection usually provides a reasonable performance, it still may be non-optimal for some cases, especially for very small networks. Also, using nstreams>1 is inherently throughput-oriented option, while for the best-latency estimations the number of streams should be set to 1.
 * `SKIP_OV_DYNAMIC_BATCHSIZE `: The topology of some models do not support openVINO dynamic batch sizes. Set the value of this parameter to `YES`, in order
-to skip the dynamic batch sizes in backend. 
+to skip the dynamic batch sizes in backend.
 * `ENABLE_BATCH_PADDING `: By default an error will be generated if backend receives a request with batch size less than max_batch_size specified in the configuration. This error can be avoided at a cost of performance by specifying `ENABLE_BATCH_PADDING` parameter as `YES`.
 
 The section of model config file specifying these parameters will look like:
