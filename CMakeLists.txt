@@ -30,12 +30,17 @@ project(tritonopenvinobackend LANGUAGES C CXX)
 
 #
 # Set TRITON_BUILD_OPENVINO_VERSION to the version of OpenVINO that
-# you want to be built for the backend. Set
-# TRITON_BUILD_CONTAINER_VERSION to the Triton container version that
-# you want to target with the build.
+# you want to be built for the backend.
+#
+# Set TRITON_BUILD_CONTAINER to the Triton container to use as a base
+# for the build. On linux you can instead set
+# TRITON_BUILD_CONTAINER_VERSION to the Triton version that you want
+# to target with the build and the corresponding container from NGC
+# will be used.
 #
 option(TRITON_ENABLE_STATS "Include statistics collections in backend" ON)
-set(TRITON_BUILD_CONTAINER_VERSION "" CACHE STRING "Triton container version to build for")
+set(TRITON_BUILD_CONTAINER "" CACHE STRING "Triton container to use a base for build")
+set(TRITON_BUILD_CONTAINER_VERSION "" CACHE STRING "Triton container version to target")
 set(TRITON_BUILD_OPENVINO_VERSION "" CACHE STRING "OpenVINO version to build")
 
 set(TRITON_BACKEND_REPO_TAG "main" CACHE STRING "Tag for triton-inference-server/backend repo")
@@ -49,9 +54,14 @@ endif()
 if(NOT TRITON_BUILD_OPENVINO_VERSION)
   message(FATAL_ERROR "TRITON_BUILD_OPENVINO_VERSION is required")
 endif()
-if(NOT TRITON_BUILD_CONTAINER_VERSION)
-  message(FATAL_ERROR "TRITON_BUILD_OPENVINO_VERSION requires TRITON_BUILD_CONTAINER_VERSION")
-endif()
+  if(NOT TRITON_BUILD_CONTAINER AND NOT TRITON_BUILD_CONTAINER_VERSION)
+    message(FATAL_ERROR
+      "TRITON_BUILD_OPENVINO_VERSION requires TRITON_BUILD_CONTAINER or TRITON_BUILD_CONTAINER_VERSION")
+  endif()
+
+  if(NOT TRITON_BUILD_CONTAINER)
+    set(TRITON_BUILD_CONTAINER "nvcr.io/nvidia/tritonserver:${TRITON_BUILD_CONTAINER_VERSION}-py3-min")
+  endif()
 
 set(TRITON_OPENVINO_INCLUDE_PATHS "${CMAKE_CURRENT_BINARY_DIR}/openvino/include")
 set(TRITON_OPENVINO_LIB_PATHS "${CMAKE_CURRENT_BINARY_DIR}/openvino/lib")
@@ -151,7 +161,7 @@ target_link_libraries(
 add_custom_command(
   OUTPUT
     openvino/lib/${OPENVINO_LIBRARY}
-  COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/tools/gen_openvino_dockerfile.py --triton-container="nvcr.io/nvidia/tritonserver:${TRITON_BUILD_CONTAINER_VERSION}-py3-min" --openvino-version="${TRITON_BUILD_OPENVINO_VERSION}" --output=Dockerfile.openvino
+  COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/tools/gen_openvino_dockerfile.py --triton-container="${TRITON_BUILD_CONTAINER}" --openvino-version="${TRITON_BUILD_OPENVINO_VERSION}" --output=Dockerfile.openvino
   COMMAND docker build --cache-from=${TRITON_OPENVINO_DOCKER_IMAGE} --cache-from=${TRITON_OPENVINO_DOCKER_IMAGE}_cache0 --cache-from=${TRITON_OPENVINO_DOCKER_IMAGE}_cache1 -t ${TRITON_OPENVINO_DOCKER_IMAGE} -f ./Dockerfile.openvino ${CMAKE_CURRENT_SOURCE_DIR}
   COMMAND docker rm openvino_backend_ov || echo "error ignored..." || true
   COMMAND docker create --name openvino_backend_ov ${TRITON_OPENVINO_DOCKER_IMAGE}
