@@ -81,6 +81,8 @@ Configuration of OpenVINO for a model is done through the Parameters section of 
 * `SKIP_OV_DYNAMIC_BATCHSIZE `: The topology of some models do not support openVINO dynamic batch sizes. Set the value of this parameter to `YES`, in order
 to skip the dynamic batch sizes in backend.
 * `ENABLE_BATCH_PADDING `: By default an error will be generated if backend receives a request with batch size less than max_batch_size specified in the configuration. This error can be avoided at a cost of performance by specifying `ENABLE_BATCH_PADDING` parameter as `YES`.
+* `RESHAPE_IO_LAYERS `: By setting this parameter as `YES`, the IO layers are reshaped to the dimensions provided in
+model configuration. By default, the dimensions in the model is used.
 
 The section of model config file specifying these parameters will look like:
 

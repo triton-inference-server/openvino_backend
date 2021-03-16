@@ -65,6 +65,7 @@ class ModelState : public BackendModel {
   virtual ~ModelState() = default;
 
   TRITONSERVER_Error* PrintModelConfig();
+  TRITONSERVER_Error* ParseParameters();
   TRITONSERVER_Error* ParseParameters(const std::string& device);
   TRITONSERVER_Error* LoadCpuExtensions(
       triton::common::TritonJson::Value& params);
@@ -125,6 +126,7 @@ class ModelState : public BackendModel {
   bool network_read_;
   bool skip_dynamic_batchsize_;
   bool enable_padding_;
+  bool reshape_io_layers_;
 };
 
 TRITONSERVER_Error*
@@ -216,15 +218,28 @@ ModelState::ReadNetwork(
 }
 
 TRITONSERVER_Error*
+ModelState::ParseParameters()
+{
+  triton::common::TritonJson::Value params;
+  bool status = model_config_.Find("parameters", &params);
+  if (status) {
+    RETURN_IF_ERROR(ParseBoolParameter(
+        "SKIP_OV_DYNAMIC_BATCHSIZE", params, &skip_dynamic_batchsize_));
+    RETURN_IF_ERROR(
+        ParseBoolParameter("ENABLE_BATCH_PADDING", params, &enable_padding_));
+    RETURN_IF_ERROR(
+        ParseBoolParameter("RESHAPE_IO_LAYERS", params, &reshape_io_layers_));
+  }
+
+  return nullptr;
+}
+
+TRITONSERVER_Error*
 ModelState::ParseParameters(const std::string& device)
 {
   // Validate and set parameters
   triton::common::TritonJson::Value params;
   bool status = model_config_.Find("parameters", &params);
-  RETURN_IF_ERROR(ParseBoolParameter(
-      "SKIP_OV_DYNAMIC_BATCHSIZE", params, &skip_dynamic_batchsize_));
-  RETURN_IF_ERROR(
-      ParseBoolParameter("ENABLE_BATCH_PADDING", params, &enable_padding_));
   if (status) {
     if (device == "CPU") {
       RETURN_IF_ERROR(LoadCpuExtensions(params));
@@ -468,6 +483,13 @@ ModelState::ValidateInputs(const size_t expected_input_cnt)
     input_tensor_names.insert(input_tensor_info.first);
   }
 
+  InferenceEngine::ICNNNetwork::InputShapes model_shapes;
+  if (reshape_io_layers_) {
+    RETURN_IF_OPENVINO_ASSIGN_ERROR(
+        model_shapes, network_.getInputShapes(),
+        "retrieving original shapes from the network");
+  }
+
   triton::common::TritonJson::Value ios;
   RETURN_IF_ERROR(model_config_.MemberAsArray("input", &ios));
   for (size_t i = 0; i < ios.ArraySize(); i++) {
@@ -504,9 +526,21 @@ ModelState::ValidateInputs(const size_t expected_input_cnt)
     } else {
       RETURN_IF_ERROR(ParseShape(io, "dims", &dims));
     }
-    RETURN_IF_ERROR(CompareDimsSupported(
-        Name(), io_name, iit->second->getTensorDesc().getDims(), dims,
-        MaxBatchSize(), false /* compare_exact */));
+
+    if (reshape_io_layers_) {
+      int index = (MaxBatchSize() != 0) ? 1 : 0;
+      for (const auto dim : dims) {
+        model_shapes[io_name][index++] = dim;
+      }
+    } else {
+      RETURN_IF_ERROR(CompareDimsSupported(
+          Name(), io_name, iit->second->getTensorDesc().getDims(), dims,
+          MaxBatchSize(), false /* compare_exact */));
+    }
+  }
+
+  if (reshape_io_layers_) {
+    network_.reshape(model_shapes);
   }
 
   // Configuring the network to handle the max_batch_size
@@ -686,6 +720,7 @@ ModelInstanceState::ModelInstanceState(
   if (model_state_->NetworkNotRead()) {
     THROW_IF_BACKEND_INSTANCE_ERROR(
         model_state_->ReadNetwork(ArtifactFilename(), &model_path_));
+    THROW_IF_BACKEND_INSTANCE_ERROR(model_state_->ParseParameters());
     THROW_IF_BACKEND_INSTANCE_ERROR(model_state_->ValidateConfigureNetwork());
   }
 
