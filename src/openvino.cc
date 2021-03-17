@@ -639,7 +639,7 @@ class ModelInstanceState : public BackendModelInstance {
       ModelState* model_state,
       TRITONBACKEND_ModelInstance* triton_model_instance,
       ModelInstanceState** state);
-  virtual ~ModelInstanceState() = default;
+  virtual ~ModelInstanceState();
 
   // Get the state of the model that corresponds to this instance.
   ModelState* StateForModel() const { return model_state_; }
@@ -682,6 +682,7 @@ class ModelInstanceState : public BackendModelInstance {
 
   std::string device_;
   InferenceEngine::InferRequest infer_request_;
+  std::map<std::string, InferenceEngine::Blob::Ptr> input_blobs_;
 
   size_t batch_pad_size_;
 };
@@ -741,6 +742,13 @@ ModelInstanceState::ModelInstanceState(
 
   THROW_IF_BACKEND_INSTANCE_ERROR(
       model_state_->CreateInferRequest(device_, &infer_request_));
+}
+
+ModelInstanceState::~ModelInstanceState()
+{
+  for (auto itr : input_blobs_) {
+    itr.second->deallocate();
+  }
 }
 
 void
@@ -1028,7 +1036,12 @@ ModelInstanceState::SetInputTensors(
         ((input_buffer_count > 1) || (request_count > 1) ||
          (batch_pad_size_ != 0));
     if (collect_input) {
-      auto data_blob = infer_request_.GetBlob(input_name);
+      if (input_blobs_.find(input_name) == input_blobs_.end()) {
+        input_blobs_[input_name] =
+            GetInputBlob(input_tensor_infos[input_name]->getTensorDesc());
+        input_blobs_[input_name]->allocate();
+      }
+      auto data_blob = input_blobs_[input_name];
       if ((size_t)batchn_byte_size != data_blob->byteSize()) {
         LOG_MESSAGE(
             TRITONSERVER_LOG_VERBOSE,
@@ -1039,9 +1052,14 @@ ModelInstanceState::SetInputTensors(
                 .c_str());
       }
       auto dest = (data_blob->buffer()).as<char*>();
+      memset(dest, 0, data_blob->byteSize());
       RESPOND_ALL_AND_RETURN_IF_ERROR(
           responses, request_count,
           CollectInputData(dest, input_idx, requests, request_count));
+      RESPOND_ALL_AND_RETURN_IF_OPENVINO_ERROR(
+          responses, request_count,
+          infer_request_.SetBlob(input_name, data_blob),
+          "setting the input tensor data");
     } else {
       const void* input_buffer = nullptr;
       uint64_t buffer_byte_size = 0;

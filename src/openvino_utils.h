@@ -166,6 +166,9 @@ bool AdjustShapesBatch(
 
 std::vector<int64_t> ConvertToSignedShape(const std::vector<size_t> shape);
 
+InferenceEngine::Blob::Ptr GetInputBlob(
+    const InferenceEngine::TensorDesc& tensor_desc);
+
 InferenceEngine::Blob::Ptr WrapInputBufferToBlob(
     const InferenceEngine::TensorDesc& tensor_desc, const void* input_buffer,
     size_t input_buffer_size = 0);
