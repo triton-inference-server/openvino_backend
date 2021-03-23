@@ -1003,6 +1003,9 @@ ModelInstanceState::SetInputTensors(
       responses, request_count,
       model_state_->GetInputsInfo(&input_tensor_infos));
 
+  BackendInputCollector collector(
+      requests, request_count, responses, model_state_->TritonMemoryManager(),
+      model_state_->EnablePinnedInput(), CudaStream());
   for (uint32_t input_idx = 0; input_idx < input_count; input_idx++) {
     TRITONBACKEND_Input* input;
     RESPOND_ALL_AND_RETURN_IF_ERROR(
@@ -1032,10 +1035,14 @@ ModelInstanceState::SetInputTensors(
 
     const int64_t batchn_byte_size = GetByteSize(input_datatype, batchn_shape);
 
-    bool collect_input =
-        ((input_buffer_count > 1) || (request_count > 1) ||
-         (batch_pad_size_ != 0));
-    if (collect_input) {
+    const char* input_buffer;
+    size_t buffer_byte_size;
+    TRITONSERVER_MemoryType memory_type;
+    int64_t memory_type_id;
+    bool contiguous_input = collector.GetInputBufferIfContiguous(
+        input_name, &input_buffer, &buffer_byte_size, &memory_type,
+        &memory_type_id);
+    if (!contiguous_input) {
       if (input_blobs_.find(input_name) == input_blobs_.end()) {
         input_blobs_[input_name] =
             GetInputBlob(input_tensor_infos[input_name]->getTensorDesc());
@@ -1061,13 +1068,13 @@ ModelInstanceState::SetInputTensors(
           infer_request_.SetBlob(input_name, data_blob),
           "setting the input tensor data");
     } else {
-      const void* input_buffer = nullptr;
-      uint64_t buffer_byte_size = 0;
-      uint32_t buffer_index = 0;
-      RESPOND_ALL_AND_RETURN_IF_ERROR(
-          responses, request_count,
-          GetTritonInputBuffer(
-              input, buffer_index, &input_buffer, &buffer_byte_size));
+      if (memory_type == TRITONSERVER_MEMORY_GPU) {
+        RESPOND_ALL_AND_RETURN_IF_ERROR(
+            responses, request_count,
+            TRITONSERVER_ErrorNew(
+                TRITONSERVER_ERROR_UNSUPPORTED,
+                "failed to get input buffer in CPU memory"));
+      }
 
       if ((uint64_t)batchn_byte_size != buffer_byte_size) {
         SendErrorForResponses(
