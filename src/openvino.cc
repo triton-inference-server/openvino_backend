@@ -662,12 +662,6 @@ class ModelInstanceState : public BackendModelInstance {
       const uint32_t request_count,
       std::vector<TRITONBACKEND_Response*>* responses,
       std::vector<const char*>* input_names);
-  TRITONSERVER_Error* CollectInputData(
-      char* dest, uint32_t input_idx, TRITONBACKEND_Request** requests,
-      const uint32_t request_count);
-  TRITONSERVER_Error* GetTritonInputBuffer(
-      TRITONBACKEND_Input* input, uint32_t buffer_index,
-      const void** input_buffer, uint64_t* buffer_byte_size);
   void ReadOutputTensors(
       size_t total_batch_size, const std::vector<const char*>& output_names,
       TRITONBACKEND_Request** requests, const uint32_t request_count,
@@ -1035,14 +1029,7 @@ ModelInstanceState::SetInputTensors(
 
     const int64_t batchn_byte_size = GetByteSize(input_datatype, batchn_shape);
 
-    const char* input_buffer;
-    size_t buffer_byte_size;
-    TRITONSERVER_MemoryType memory_type;
-    int64_t memory_type_id;
-    bool contiguous_input = collector.GetInputBufferIfContiguous(
-        input_name, &input_buffer, &buffer_byte_size, &memory_type,
-        &memory_type_id);
-    if (!contiguous_input) {
+    if (batch_pad_size_ != 0) {
       if (input_blobs_.find(input_name) == input_blobs_.end()) {
         input_blobs_[input_name] =
             GetInputBlob(input_tensor_infos[input_name]->getTensorDesc());
@@ -1060,14 +1047,22 @@ ModelInstanceState::SetInputTensors(
       }
       auto dest = (data_blob->buffer()).as<char*>();
       memset(dest, 0, data_blob->byteSize());
-      RESPOND_ALL_AND_RETURN_IF_ERROR(
-          responses, request_count,
-          CollectInputData(dest, input_idx, requests, request_count));
+      collector.ProcessTensor(
+          input_name, dest, data_blob->byteSize(), TRITONSERVER_MEMORY_CPU, 0);
       RESPOND_ALL_AND_RETURN_IF_OPENVINO_ERROR(
           responses, request_count,
           infer_request_.SetBlob(input_name, data_blob),
           "setting the input tensor data");
     } else {
+      const char* input_buffer;
+      size_t buffer_byte_size;
+      TRITONSERVER_MemoryType memory_type;
+      int64_t memory_type_id;
+      RESPOND_ALL_AND_RETURN_IF_ERROR(
+            responses, request_count,
+      collector.ProcessTensor(
+          input_name, nullptr, 0, {{TRITONSERVER_MEMORY_CPU_PINNED, 0}, {TRITONSERVER_MEMORY_CPU, 0}},
+          &input_buffer, &buffer_byte_size, &memory_type, &memory_type_id));
       if (memory_type == TRITONSERVER_MEMORY_GPU) {
         RESPOND_ALL_AND_RETURN_IF_ERROR(
             responses, request_count,
@@ -1098,59 +1093,6 @@ ModelInstanceState::SetInputTensors(
           "setting the input tensor data");
     }
   }
-}
-
-TRITONSERVER_Error*
-ModelInstanceState::CollectInputData(
-    char* dest, uint32_t input_idx, TRITONBACKEND_Request** requests,
-    const uint32_t request_count)
-{
-  size_t dest_offset = 0;
-  for (uint32_t i = 0; i < request_count; i++) {
-    TRITONBACKEND_Input* input;
-    RETURN_IF_ERROR(
-        TRITONBACKEND_RequestInputByIndex(requests[i], input_idx, &input));
-
-    const char* input_name;
-    TRITONSERVER_DataType input_datatype;
-    const int64_t* input_shape;
-    uint32_t input_dims_count;
-    uint64_t input_byte_size;
-    uint32_t input_buffer_count;
-    RETURN_IF_ERROR(TRITONBACKEND_InputProperties(
-        input, &input_name, &input_datatype, &input_shape, &input_dims_count,
-        &input_byte_size, &input_buffer_count));
-
-    for (uint32_t b = 0; b < input_buffer_count; b++) {
-      const void* input_buffer = nullptr;
-      uint64_t buffer_byte_size = 0;
-      RETURN_IF_ERROR(
-          GetTritonInputBuffer(input, b, &input_buffer, &buffer_byte_size));
-      memcpy(dest + dest_offset, input_buffer, buffer_byte_size);
-      dest_offset += buffer_byte_size;
-    }
-  }
-  return nullptr;
-}
-
-TRITONSERVER_Error*
-ModelInstanceState::GetTritonInputBuffer(
-    TRITONBACKEND_Input* input, uint32_t buffer_index,
-    const void** input_buffer, uint64_t* buffer_byte_size)
-{
-  TRITONSERVER_MemoryType input_memory_type = TRITONSERVER_MEMORY_CPU;
-  int64_t input_memory_type_id = 0;
-  auto status = TRITONBACKEND_InputBuffer(
-      input, buffer_index, input_buffer, buffer_byte_size, &input_memory_type,
-      &input_memory_type_id);
-  if (status == nullptr) {
-    if (input_memory_type == TRITONSERVER_MEMORY_GPU) {
-      return TRITONSERVER_ErrorNew(
-          TRITONSERVER_ERROR_UNSUPPORTED,
-          "failed to get input buffer in CPU memory");
-    }
-  }
-  return status;
 }
 
 void
