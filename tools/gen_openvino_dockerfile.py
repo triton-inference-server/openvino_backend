@@ -26,25 +26,16 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 import argparse
+import os
+import platform
 
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
+def target_platform():
+    if FLAGS.target_platform is not None:
+        return FLAGS.target_platform
+    return platform.system().lower()
 
-    parser.add_argument('--triton-container',
-                        type=str,
-                        required=True,
-                        help='Triton base container to use for build.')
-    parser.add_argument('--openvino-version',
-                        type=str,
-                        required=True,
-                        help='OpenVINO version.')
-    parser.add_argument('--output',
-                        type=str,
-                        required=True,
-                        help='File to write Dockerfile to.')
 
-    FLAGS = parser.parse_args()
-
+def dockerfile_common():
     df = '''
 ARG BASE_IMAGE={}
 ARG OPENVINO_VERSION={}
@@ -52,13 +43,19 @@ ARG OPENVINO_VERSION={}
 
     df += '''
 FROM ${BASE_IMAGE}
+WORKDIR /workspace
+'''
 
+    return df
+
+
+def dockerfile_for_linux(output_file):
+    df = dockerfile_common()
+    df += '''
 # Ensure apt-get won't prompt for selecting options
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends \
         patchelf
-
-WORKDIR /workspace
 
 ARG OPENVINO_VERSION
 ENV INTEL_OPENVINO_DIR /opt/intel/openvino_${OPENVINO_VERSION}
@@ -72,8 +69,6 @@ RUN wget https://apt.repos.intel.com/openvino/2021/GPG-PUB-KEY-INTEL-OPENVINO-20
     echo "deb https://apt.repos.intel.com/openvino/2021 all main">intel-openvino-2021.list && \
     apt update && \
     apt install -y intel-openvino-dev-ubuntu20-${OPENVINO_VERSION}
-# && \
-#    cd ${INTEL_OPENVINO_DIR}/install_dependencies && ./install_openvino_dependencies.sh
 
 ARG INTEL_COMPUTE_RUNTIME_URL=https://github.com/intel/compute-runtime/releases/download/19.41.14441
 RUN wget ${INTEL_COMPUTE_RUNTIME_URL}/intel-gmmlib_19.3.2_amd64.deb && \
@@ -90,8 +85,7 @@ WORKDIR /opt/openvino
 
 RUN mkdir -p /opt/openvino/include && \
    (cd /opt/openvino/include && \
-     cp -r /opt/intel/openvino_${OPENVINO_VERSION}/deployment_tools/inference_engine/include/* \
-          .)
+     cp -r /opt/intel/openvino_${OPENVINO_VERSION}/deployment_tools/inference_engine/include/* .)
 
 RUN mkdir -p /opt/openvino/lib && \
     cp -r /opt/intel/openvino_${OPENVINO_VERSION}/licensing \
@@ -120,9 +114,7 @@ RUN mkdir -p /opt/openvino/lib && \
      chmod a-x * && \
      ln -sf libtbb.so.2 libtbb.so && \
      ln -sf libtbbmalloc.so.2 libtbbmalloc.so)
-'''
 
-    df += '''
 RUN cd /opt/openvino/lib && \
     for i in `find . -mindepth 1 -maxdepth 1 -type f -name '*\.so*'`; do \
         patchelf --set-rpath '$ORIGIN' $i; \
@@ -131,3 +123,82 @@ RUN cd /opt/openvino/lib && \
 
     with open(FLAGS.output, "w") as dfile:
         dfile.write(df)
+
+
+def dockerfile_for_windows(output_file):
+    df = dockerfile_common()
+    df += '''
+SHELL ["cmd", "/S", "/C"]
+
+# Build instructions:
+# https://github.com/openvinotoolkit/openvino/wiki/BuildingForWindows
+
+ARG OPENVINO_VERSION
+WORKDIR /workspace
+
+# FIXME
+#ADD https://github.com/openvinotoolkit/openvino/archive/releases/2021/3.zip
+RUN git clone https://github.com/openvinotoolkit/openvino.git
+
+WORKDIR /workspace/openvino
+RUN git checkout releases/2021/3
+RUN git submodule update --init --recursive
+
+WORKDIR /workspace/openvino/build
+ARG VS_DEVCMD_BAT="\BuildTools\Common7\Tools\VsDevCmd.bat"
+ARG CMAKE_BAT="cmake \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DCMAKE_INSTALL_PREFIX=C:/workspace/install \
+          -DENABLE_CLDNN=OFF \
+          -DENABLE_TESTS=OFF \
+          -DENABLE_VALIDATION_SET=OFF \
+          -DNGRAPH_ONNX_IMPORT_ENABLE=OFF \
+          -DNGRAPH_DEPRECATED_ENABLE=FALSE \
+          .."
+ARG CMAKE_BUILD_BAT="cmake --build . --config Release --target install --verbose -j8"
+RUN powershell Set-Content 'build.bat' -value 'call %VS_DEVCMD_BAT%','%CMAKE_BAT%','%CMAKE_BUILD_BAT%'
+RUN build.bat
+
+WORKDIR /opt/openvino
+RUN xcopy /I /E \\workspace\\openvino\\licensing LICENSE.openvino
+RUN xcopy /I /E \\workspace\\install\\deployment_tools\\inference_engine\\include include
+RUN xcopy /I /E \\workspace\\install\\deployment_tools\\inference_engine\\bin\\intel64\\Release bin
+RUN xcopy /I /E \\workspace\\install\\deployment_tools\\inference_engine\\lib\\intel64\\Release lib
+RUN copy \\workspace\\install\\deployment_tools\\ngraph\\lib\\ngraph.dll bin\\ngraph.dll
+RUN copy \\workspace\\install\\deployment_tools\\ngraph\\lib\\ngraph.lib lib\\ngraph.lib
+RUN copy \\workspace\\install\\deployment_tools\\inference_engine\\external\\tbb\\bin\\tbb.dll bin\\tbb.dll
+'''
+
+    with open(FLAGS.output, "w") as dfile:
+        dfile.write(df)
+
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument('--triton-container',
+                        type=str,
+                        required=True,
+                        help='Triton base container to use for build.')
+    parser.add_argument('--openvino-version',
+                        type=str,
+                        required=True,
+                        help='OpenVINO version.')
+    parser.add_argument('--output',
+                        type=str,
+                        required=True,
+                        help='File to write Dockerfile to.')
+    parser.add_argument(
+        '--target-platform',
+        required=False,
+        default=None,
+        help=
+        'Target for build, can be "ubuntu" or "windows". If not specified, build targets the current platform.'
+    )
+
+    FLAGS = parser.parse_args()
+
+    if target_platform() == 'windows':
+        dockerfile_for_windows(FLAGS.output)
+    else:
+        dockerfile_for_linux(FLAGS.output)
