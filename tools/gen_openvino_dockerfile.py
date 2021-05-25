@@ -142,7 +142,7 @@ WORKDIR /workspace
 # are relying on the use of a release branch that does not change once
 # it is released (if a patch is needed for that release we expect
 # there to be a new version).
-RUN git clone -b ${OPENVINO_VERSION} https://github.com/openvinotoolkit/openvino.git
+RUN git clone -b %OPENVINO_VERSION% https://github.com/openvinotoolkit/openvino.git
 
 WORKDIR /workspace/openvino
 RUN git submodule update --init --recursive
