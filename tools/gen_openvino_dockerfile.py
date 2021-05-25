@@ -126,15 +126,20 @@ RUN cd /opt/openvino/lib && \
 
 
 def dockerfile_for_windows(output_file):
-    repo_branch = 'releases/' + FLAGS.openvino_version.replace('.', '/')
-
     df = dockerfile_common()
     df += '''
 SHELL ["cmd", "/S", "/C"]
 
 # Build instructions:
 # https://github.com/openvinotoolkit/openvino/wiki/BuildingForWindows
+'''
+    
+    repo_branch = 'releases/' + FLAGS.openvino_version.replace('.', '/')
+    df += '''
+ARG OPENVINO_BRANCH={}
+'''.format(repo_branch)
 
+    df += '''
 ARG OPENVINO_VERSION
 WORKDIR /workspace
 
