@@ -146,7 +146,7 @@ WORKDIR /workspace
 # Can't use "git clone" in dockerfile as it will be cached and not
 # recognize changes to the git repo. Instead we pull the tar/zip of
 # the branch since docker can detect when that changes.
-ADD https://github.com/openvinotoolkit/openvino/archive/%OPENVINO_BRANCH%.zip openvino.zip
+ADD https://github.com/openvinotoolkit/openvino/archive/${OPENVINO_BRANCH}.zip openvino.zip
 RUN powershell Extract-Archive -path openvino.zip
 
 WORKDIR /workspace/openvino
