@@ -132,22 +132,17 @@ SHELL ["cmd", "/S", "/C"]
 
 # Build instructions:
 # https://github.com/openvinotoolkit/openvino/wiki/BuildingForWindows
-'''
-    
-    repo_branch = 'releases/' + FLAGS.openvino_version.replace('.', '/')
-    df += '''
-ARG OPENVINO_BRANCH={}
-'''.format(repo_branch)
 
-    df += '''
 ARG OPENVINO_VERSION
 WORKDIR /workspace
 
-# Can't use "git clone" in dockerfile as it will be cached and not
-# recognize changes to the git repo. Instead we pull the tar/zip of
-# the branch since docker can detect when that changes.
-ADD https://github.com/openvinotoolkit/openvino/archive/${OPENVINO_BRANCH}.zip openvino.zip
-RUN powershell Expand-Archive -path openvino.zip
+# When git cloning it is important that we include '-b' and branchname
+# so that this command is re-run when the branch changes, otherwise it
+# will be cached by docker and continue using an old clone/branch. We
+# are relying on the use of a release branch that does not change once
+# it is released (if a patch is needed for that release we expect
+# there to be a new version).
+RUN git clone -b ${OPENVINO_VERSION} https://github.com/openvinotoolkit/openvino.git
 
 WORKDIR /workspace/openvino
 RUN git submodule update --init --recursive
