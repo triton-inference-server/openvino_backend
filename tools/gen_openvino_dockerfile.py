@@ -147,7 +147,7 @@ WORKDIR /workspace
 # recognize changes to the git repo. Instead we pull the tar/zip of
 # the branch since docker can detect when that changes.
 ADD https://github.com/openvinotoolkit/openvino/archive/${OPENVINO_BRANCH}.zip openvino.zip
-RUN powershell Extract-Archive -path openvino.zip
+RUN powershell Expand-Archive -path openvino.zip
 
 WORKDIR /workspace/openvino
 RUN git submodule update --init --recursive
