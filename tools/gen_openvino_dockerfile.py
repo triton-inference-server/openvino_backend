@@ -126,6 +126,8 @@ RUN cd /opt/openvino/lib && \
 
 
 def dockerfile_for_windows(output_file):
+    repo_branch = 'releases/' + FLAGS.openvino_version.replace('.', '/')
+
     df = dockerfile_common()
     df += '''
 SHELL ["cmd", "/S", "/C"]
@@ -136,12 +138,13 @@ SHELL ["cmd", "/S", "/C"]
 ARG OPENVINO_VERSION
 WORKDIR /workspace
 
-# FIXME
-#ADD https://github.com/openvinotoolkit/openvino/archive/releases/2021/3.zip
-RUN git clone https://github.com/openvinotoolkit/openvino.git
+# Can't use "git clone" in dockerfile as it will be cached and not
+# recognize changes to the git repo. Instead we pull the tar/zip of
+# the branch since docker can detect when that changes.
+ADD https://github.com/openvinotoolkit/openvino/archive/%OPENVINO_BRANCH%.zip openvino.zip
+RUN powershell Extract-Archive -path openvino.zip
 
 WORKDIR /workspace/openvino
-RUN git checkout releases/2021/3
 RUN git submodule update --init --recursive
 
 WORKDIR /workspace/openvino/build
