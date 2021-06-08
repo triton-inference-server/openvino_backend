@@ -24,6 +24,7 @@
 // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+#include <inference_engine.hpp>
 #include <stdint.h>
 #include <mutex>
 #include <vector>
@@ -141,6 +142,15 @@ ModelState::Create(TRITONBACKEND_Model* triton_model, ModelState** state)
         std::string("unexpected nullptr in BackendModelException"));
     RETURN_IF_ERROR(ex.err_);
   }
+  catch (const InferenceEngine::details::InferenceEngineException& e) {
+    return TRITONSERVER_ErrorNew(
+          TRITONSERVER_ERROR_INTERNAL,
+          (std::string("ModelState::Create InferenceEngineException: ") + e.what()).c_str());
+  }
+  catch (...) {
+    return TRITONSERVER_ErrorNew(
+          TRITONSERVER_ERROR_INTERNAL, "ModelState::Create exception");
+  }
 
   // Auto-complete the configuration if requested...
   bool auto_complete_config = false;
@@ -164,7 +174,8 @@ ModelState::Create(TRITONBACKEND_Model* triton_model, ModelState** state)
 
 ModelState::ModelState(TRITONBACKEND_Model* triton_model)
     : BackendModel(triton_model), network_read_(false),
-      skip_dynamic_batchsize_(false), enable_padding_(false)
+      skip_dynamic_batchsize_(false), enable_padding_(false),
+      reshape_io_layers_(false)
 {
 }
 
@@ -694,6 +705,15 @@ ModelInstanceState::Create(
         ex.err_ == nullptr, TRITONSERVER_ERROR_INTERNAL,
         std::string("unexpected nullptr in BackendModelInstanceException"));
     RETURN_IF_ERROR(ex.err_);
+  }
+  catch (const InferenceEngine::details::InferenceEngineException& e) {
+    return TRITONSERVER_ErrorNew(
+          TRITONSERVER_ERROR_INTERNAL,
+          (std::string("ModelState::Create InferenceEngineException: ") + e.what()).c_str());
+  }
+  catch (...) {
+    return TRITONSERVER_ErrorNew(
+          TRITONSERVER_ERROR_INTERNAL, "ModelState::Create exception");
   }
 
   return nullptr;  // success
