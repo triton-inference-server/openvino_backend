@@ -56,70 +56,65 @@ def dockerfile_for_linux(output_file):
 # Ensure apt-get won't prompt for selecting options
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends \
+        cmake \
+        libglib2.0-dev \
+        libtbb-dev \
         patchelf
 
+# Build instructions:
+# https://github.com/openvinotoolkit/openvino/wiki/BuildingForLinux
+
 ARG OPENVINO_VERSION
-ENV INTEL_OPENVINO_DIR /opt/intel/openvino_${OPENVINO_VERSION}
-ENV LD_LIBRARY_PATH $INTEL_OPENVINO_DIR/deployment_tools/inference_engine/lib/intel64:$INTEL_OPENVINO_DIR/deployment_tools/ngraph/lib:$INTEL_OPENVINO_DIR/deployment_tools/inference_engine/external/tbb/lib:/usr/local/openblas/lib:$LD_LIBRARY_PATH
-ENV PYTHONPATH $INTEL_OPENVINO_DIR/tools:$PYTHONPATH
-ENV IE_PLUGINS_PATH $INTEL_OPENVINO_DIR/deployment_tools/inference_engine/lib/intel64
+ARG OPENVINO_BUILD_TYPE
+WORKDIR /workspace
 
-RUN wget https://apt.repos.intel.com/openvino/2021/GPG-PUB-KEY-INTEL-OPENVINO-2021 && \
-    apt-key add GPG-PUB-KEY-INTEL-OPENVINO-2021 && rm GPG-PUB-KEY-INTEL-OPENVINO-2021 && \
-    cd /etc/apt/sources.list.d && \
-    echo "deb https://apt.repos.intel.com/openvino/2021 all main">intel-openvino-2021.list && \
-    apt update && \
-    apt install -y intel-openvino-dev-ubuntu20-${OPENVINO_VERSION}
+# When git cloning it is important that we include '-b' and branchname
+# so that this command is re-run when the branch changes, otherwise it
+# will be cached by docker and continue using an old clone/branch. We
+# are relying on the use of a release branch that does not change once
+# it is released (if a patch is needed for that release we expect
+# there to be a new version).
+RUN git clone -b ${OPENVINO_VERSION} https://github.com/openvinotoolkit/openvino.git
 
-ARG INTEL_COMPUTE_RUNTIME_URL=https://github.com/intel/compute-runtime/releases/download/19.41.14441
-RUN wget ${INTEL_COMPUTE_RUNTIME_URL}/intel-gmmlib_19.3.2_amd64.deb && \
-    wget ${INTEL_COMPUTE_RUNTIME_URL}/intel-igc-core_1.0.2597_amd64.deb && \
-    wget ${INTEL_COMPUTE_RUNTIME_URL}/intel-igc-opencl_1.0.2597_amd64.deb && \
-    wget ${INTEL_COMPUTE_RUNTIME_URL}/intel-opencl_19.41.14441_amd64.deb && \
-    wget ${INTEL_COMPUTE_RUNTIME_URL}/intel-ocloc_19.41.14441_amd64.deb && \
-    dpkg -i *.deb && rm -rf *.deb
+WORKDIR /workspace/openvino
+RUN git submodule update --init --recursive
 
-#
-# Copy all artifacts needed by the backend
-#
+WORKDIR /workspace/openvino/build
+RUN cmake \
+        -DCMAKE_BUILD_TYPE=${OPENVINO_BUILD_TYPE} \
+        -DCMAKE_INSTALL_PREFIX=/workspace/install \
+        -DENABLE_VPU=OFF \
+        -DENABLE_CLDNN=OFF \
+        -DTHREADING=OMP \
+        -DENABLE_GNA=OFF \
+        -DENABLE_DLIA=OFF \
+        -DENABLE_TESTS=OFF \
+        -DENABLE_VALIDATION_SET=OFF \
+        -DNGRAPH_ONNX_IMPORT_ENABLE=OFF \
+        -DNGRAPH_DEPRECATED_ENABLE=FALSE \
+        .. && \
+    TEMPCV_DIR=/workspace/openvino/inference-engine/temp/opencv_4* && \
+    OPENCV_DIRS=$(ls -d -1 ${TEMPCV_DIR} ) && \
+    export LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:${OPENCV_DIRS[0]}/opencv/lib && \
+    make -j$(nproc) install
+
 WORKDIR /opt/openvino
-
-RUN mkdir -p /opt/openvino/include && \
-   (cd /opt/openvino/include && \
-     cp -r /opt/intel/openvino_${OPENVINO_VERSION}/deployment_tools/inference_engine/include/* .)
-
-RUN mkdir -p /opt/openvino/lib && \
-    cp -r /opt/intel/openvino_${OPENVINO_VERSION}/licensing \
-          /opt/openvino/LICENSE.openvino && \
-    cp /opt/intel/openvino_${OPENVINO_VERSION}/deployment_tools/inference_engine/lib/intel64/libinference_engine.so \
-       /opt/openvino/lib && \
-    cp /opt/intel/openvino_${OPENVINO_VERSION}/deployment_tools/inference_engine/lib/intel64/libinference_engine_legacy.so \
-       /opt/openvino/lib && \
-    cp /opt/intel/openvino_${OPENVINO_VERSION}/deployment_tools/inference_engine/lib/intel64/libinference_engine_transformations.so \
-       /opt/openvino/lib && \
-    cp /opt/intel/openvino_${OPENVINO_VERSION}/deployment_tools/ngraph/lib/libngraph.so \
-       /opt/openvino/lib && \
-    cp /opt/intel/openvino_${OPENVINO_VERSION}/deployment_tools/inference_engine/external/tbb/lib/libtbb.so.2 \
-       /opt/openvino/lib && \
-    cp /opt/intel/openvino_${OPENVINO_VERSION}/deployment_tools/inference_engine/external/tbb/lib/libtbbmalloc.so.2 \
-       /opt/openvino/lib && \
-    cp /opt/intel/openvino_${OPENVINO_VERSION}/deployment_tools/inference_engine/lib/intel64/libMKLDNNPlugin.so \
-       /opt/openvino/lib && \
-    cp /opt/intel/openvino_${OPENVINO_VERSION}/deployment_tools/inference_engine/lib/intel64/libinference_engine_lp_transformations.so \
-       /opt/openvino/lib && \
-    cp /opt/intel/openvino_${OPENVINO_VERSION}/deployment_tools/inference_engine/lib/intel64/libinference_engine_ir_reader.so \
-       /opt/openvino/lib && \
-    cp /opt/intel/openvino_${OPENVINO_VERSION}/deployment_tools/inference_engine/lib/intel64/libinference_engine_onnx_reader.so \
-       /opt/openvino/lib && \
-    (cd /opt/openvino/lib && \
-     chmod a-x * && \
-     ln -sf libtbb.so.2 libtbb.so && \
-     ln -sf libtbbmalloc.so.2 libtbbmalloc.so)
-
-RUN cd /opt/openvino/lib && \
-    for i in `find . -mindepth 1 -maxdepth 1 -type f -name '*\.so*'`; do \
+ARG IPREFIX=/workspace/install/deployment_tools/inference_engine/lib/intel64
+RUN cp -r /workspace/openvino/licensing LICENSE.openvino
+RUN cp -r /workspace/openvino/inference-engine/include .
+RUN mkdir -p lib && \
+    cp ${IPREFIX}/libinference_engine.so lib/. && \
+    cp ${IPREFIX}/libinference_engine_legacy.so lib/. && \
+    cp ${IPREFIX}/libinference_engine_transformations.so lib/. && \
+    cp ${IPREFIX}/libinference_engine_lp_transformations.so lib/. && \
+    cp ${IPREFIX}/libinference_engine_ir_reader.so lib/. && \
+    cp ${IPREFIX}/libMKLDNNPlugin.so lib/. && \
+    cp /workspace/install/lib/libngraph.so lib/. && \
+    cp /workspace/openvino/inference-engine/temp/omp/lib/libiomp5.so lib/.
+RUN (cd lib && \
+     for i in `find . -mindepth 1 -maxdepth 1 -type f -name '*\.so*'`; do \
         patchelf --set-rpath '$ORIGIN' $i; \
-    done
+     done)
 '''
 
     with open(FLAGS.output, "w") as dfile:
