@@ -109,8 +109,8 @@ RUN mkdir -p lib && \
     cp ${IPREFIX}/libinference_engine_lp_transformations.so lib/. && \
     cp ${IPREFIX}/libinference_engine_ir_reader.so lib/. && \
     cp ${IPREFIX}/libMKLDNNPlugin.so lib/. && \
-    cp /workspace/install/lib/libngraph.so lib/. && \
-    cp /workspace/openvino/inference-engine/temp/omp/lib/libiomp5.so lib/.
+    cp /workspace/install/deployment_tools/ngraph/lib/libngraph.so lib/. && \
+    cp /workspace/install/deployment_tools/inference_engine/external/omp/lib/libiomp5.so lib/.
 RUN (cd lib && \
      for i in `find . -mindepth 1 -maxdepth 1 -type f -name '*\.so*'`; do \
         patchelf --set-rpath '$ORIGIN' $i; \

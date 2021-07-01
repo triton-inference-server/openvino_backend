@@ -142,10 +142,10 @@ ModelState::Create(TRITONBACKEND_Model* triton_model, ModelState** state)
         std::string("unexpected nullptr in BackendModelException"));
     RETURN_IF_ERROR(ex.err_);
   }
-  catch (const InferenceEngine::details::InferenceEngineException& e) {
+  catch (const InferenceEngine::Exception& e) {
     return TRITONSERVER_ErrorNew(
           TRITONSERVER_ERROR_INTERNAL,
-          (std::string("ModelState::Create InferenceEngineException: ") + e.what()).c_str());
+          (std::string("ModelState::Create InferenceEngine::Exception: ") + e.what()).c_str());
   }
   catch (...) {
     return TRITONSERVER_ErrorNew(
@@ -278,7 +278,7 @@ ModelState::LoadCpuExtensions(triton::common::TritonJson::Value& params)
     // CPU (MKLDNN) extensions is loaded as a shared library and passed as a
     // pointer to base extension
     const auto extension_ptr =
-        InferenceEngine::make_so_pointer<InferenceEngine::IExtension>(
+        std::make_shared<InferenceEngine::Extension>(
             cpu_ext_path);
     RETURN_IF_OPENVINO_ERROR(
         inference_engine_.AddExtension(extension_ptr),
@@ -706,10 +706,10 @@ ModelInstanceState::Create(
         std::string("unexpected nullptr in BackendModelInstanceException"));
     RETURN_IF_ERROR(ex.err_);
   }
-  catch (const InferenceEngine::details::InferenceEngineException& e) {
+  catch (const InferenceEngine::Exception& e) {
     return TRITONSERVER_ErrorNew(
           TRITONSERVER_ERROR_INTERNAL,
-          (std::string("ModelState::Create InferenceEngineException: ") + e.what()).c_str());
+          (std::string("ModelState::Create InferenceEngine::Exception: ") + e.what()).c_str());
   }
   catch (...) {
     return TRITONSERVER_ErrorNew(
