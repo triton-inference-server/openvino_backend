@@ -1,4 +1,4 @@
-// Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
+// Copyright 2021, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -24,8 +24,8 @@
 // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include <inference_engine.hpp>
 #include <stdint.h>
+#include <inference_engine.hpp>
 #include <mutex>
 #include <vector>
 #include "openvino_utils.h"
@@ -144,12 +144,14 @@ ModelState::Create(TRITONBACKEND_Model* triton_model, ModelState** state)
   }
   catch (const InferenceEngine::details::InferenceEngineException& e) {
     return TRITONSERVER_ErrorNew(
-          TRITONSERVER_ERROR_INTERNAL,
-          (std::string("ModelState::Create InferenceEngineException: ") + e.what()).c_str());
+        TRITONSERVER_ERROR_INTERNAL,
+        (std::string("ModelState::Create InferenceEngineException: ") +
+         e.what())
+            .c_str());
   }
   catch (...) {
     return TRITONSERVER_ErrorNew(
-          TRITONSERVER_ERROR_INTERNAL, "ModelState::Create exception");
+        TRITONSERVER_ERROR_INTERNAL, "ModelState::Create exception");
   }
 
   // Auto-complete the configuration if requested...
@@ -708,12 +710,14 @@ ModelInstanceState::Create(
   }
   catch (const InferenceEngine::details::InferenceEngineException& e) {
     return TRITONSERVER_ErrorNew(
-          TRITONSERVER_ERROR_INTERNAL,
-          (std::string("ModelState::Create InferenceEngineException: ") + e.what()).c_str());
+        TRITONSERVER_ERROR_INTERNAL,
+        (std::string("ModelState::Create InferenceEngineException: ") +
+         e.what())
+            .c_str());
   }
   catch (...) {
     return TRITONSERVER_ErrorNew(
-          TRITONSERVER_ERROR_INTERNAL, "ModelState::Create exception");
+        TRITONSERVER_ERROR_INTERNAL, "ModelState::Create exception");
   }
 
   return nullptr;  // success
@@ -1019,7 +1023,8 @@ ModelInstanceState::SetInputTensors(
 
   BackendInputCollector collector(
       requests, request_count, responses, model_state_->TritonMemoryManager(),
-      model_state_->EnablePinnedInput(), CudaStream());
+      model_state_->EnablePinnedInput(), CudaStream(), nullptr, nullptr, 0,
+      HostPolicyName().c_str());
   for (uint32_t input_idx = 0; input_idx < input_count; input_idx++) {
     TRITONBACKEND_Input* input;
     RESPOND_ALL_AND_RETURN_IF_ERROR(
@@ -1030,13 +1035,11 @@ ModelInstanceState::SetInputTensors(
     TRITONSERVER_DataType input_datatype;
     const int64_t* input_shape;
     uint32_t input_dims_count;
-    uint64_t input_byte_size;
-    uint32_t input_buffer_count;
     RESPOND_ALL_AND_RETURN_IF_ERROR(
         responses, request_count,
         TRITONBACKEND_InputProperties(
             input, &input_name, &input_datatype, &input_shape,
-            &input_dims_count, &input_byte_size, &input_buffer_count));
+            &input_dims_count, nullptr, nullptr));
 
     input_names->emplace_back(input_name);
 
@@ -1079,10 +1082,12 @@ ModelInstanceState::SetInputTensors(
       TRITONSERVER_MemoryType memory_type;
       int64_t memory_type_id;
       RESPOND_ALL_AND_RETURN_IF_ERROR(
-            responses, request_count,
-      collector.ProcessTensor(
-          input_name, nullptr, 0, {{TRITONSERVER_MEMORY_CPU_PINNED, 0}, {TRITONSERVER_MEMORY_CPU, 0}},
-          &input_buffer, &buffer_byte_size, &memory_type, &memory_type_id));
+          responses, request_count,
+          collector.ProcessTensor(
+              input_name, nullptr, 0,
+              {{TRITONSERVER_MEMORY_CPU_PINNED, 0},
+               {TRITONSERVER_MEMORY_CPU, 0}},
+              &input_buffer, &buffer_byte_size, &memory_type, &memory_type_id));
       if (memory_type == TRITONSERVER_MEMORY_GPU) {
         RESPOND_ALL_AND_RETURN_IF_ERROR(
             responses, request_count,
