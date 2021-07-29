@@ -49,6 +49,76 @@ WORKDIR /workspace
 
     return df
 
+def dockerfile_for_linux_prebuilt(output_file):
+    df = dockerfile_common()
+    df += '''
+# Ensure apt-get won't prompt for selecting options
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        patchelf
+
+ARG OPENVINO_VERSION
+WORKDIR /workspace
+
+ENV INTEL_OPENVINO_DIR /opt/intel/openvino_${OPENVINO_VERSION}
+ENV LD_LIBRARY_PATH $INTEL_OPENVINO_DIR/deployment_tools/inference_engine/lib/intel64:$INTEL_OPENVINO_DIR/deployment_tools/ngraph/lib:$INTEL_OPENVINO_DIR/deployment_tools/inference_engine/external/tbb/lib:/usr/local/openblas/lib:$LD_LIBRARY_PATH
+ENV PYTHONPATH $INTEL_OPENVINO_DIR/tools:$PYTHONPATH
+ENV IE_PLUGINS_PATH $INTEL_OPENVINO_DIR/deployment_tools/inference_engine/lib/intel64
+RUN wget https://apt.repos.intel.com/openvino/2021/GPG-PUB-KEY-INTEL-OPENVINO-2021 && \
+    apt-key add GPG-PUB-KEY-INTEL-OPENVINO-2021 && rm GPG-PUB-KEY-INTEL-OPENVINO-2021 && \
+    cd /etc/apt/sources.list.d && \
+    echo "deb https://apt.repos.intel.com/openvino/2021 all main">intel-openvino-2021.list && \
+    apt update && \
+    apt install -y intel-openvino-dev-ubuntu20-${OPENVINO_VERSION}
+# && \
+#    cd ${INTEL_OPENVINO_DIR}/install_dependencies && ./install_openvino_dependencies.sh
+ARG INTEL_COMPUTE_RUNTIME_URL=https://github.com/intel/compute-runtime/releases/download/19.41.14441
+RUN wget ${INTEL_COMPUTE_RUNTIME_URL}/intel-gmmlib_19.3.2_amd64.deb && \
+    wget ${INTEL_COMPUTE_RUNTIME_URL}/intel-igc-core_1.0.2597_amd64.deb && \
+    wget ${INTEL_COMPUTE_RUNTIME_URL}/intel-igc-opencl_1.0.2597_amd64.deb && \
+    wget ${INTEL_COMPUTE_RUNTIME_URL}/intel-opencl_19.41.14441_amd64.deb && \
+    wget ${INTEL_COMPUTE_RUNTIME_URL}/intel-ocloc_19.41.14441_amd64.deb && \
+    dpkg -i *.deb && rm -rf *.deb
+#
+# Copy all artifacts needed by the backend
+#
+WORKDIR /opt/openvino
+RUN mkdir -p /opt/openvino/include && \
+   (cd /opt/openvino/include && \
+     cp -r /opt/intel/openvino_${OPENVINO_VERSION}/deployment_tools/inference_engine/include/* \
+          .)
+RUN mkdir -p /opt/openvino/lib && \
+    cp -r /opt/intel/openvino_${OPENVINO_VERSION}/licensing \
+          /opt/openvino/LICENSE.openvino && \
+    cp /opt/intel/openvino_${OPENVINO_VERSION}/deployment_tools/inference_engine/lib/intel64/libinference_engine.so \
+       /opt/openvino/lib && \
+    cp /opt/intel/openvino_${OPENVINO_VERSION}/deployment_tools/inference_engine/lib/intel64/libinference_engine_legacy.so \
+       /opt/openvino/lib && \
+    cp /opt/intel/openvino_${OPENVINO_VERSION}/deployment_tools/inference_engine/lib/intel64/libinference_engine_transformations.so \
+       /opt/openvino/lib && \
+    cp /opt/intel/openvino_${OPENVINO_VERSION}/deployment_tools/ngraph/lib/libngraph.so \
+       /opt/openvino/lib && \
+    cp /opt/intel/openvino_${OPENVINO_VERSION}/deployment_tools/inference_engine/external/tbb/lib/libtbb.so.2 \
+       /opt/openvino/lib && \
+    cp /opt/intel/openvino_${OPENVINO_VERSION}/deployment_tools/inference_engine/external/tbb/lib/libtbbmalloc.so.2 \
+       /opt/openvino/lib && \
+    cp /opt/intel/openvino_${OPENVINO_VERSION}/deployment_tools/inference_engine/lib/intel64/libMKLDNNPlugin.so \
+       /opt/openvino/lib && \
+    cp /opt/intel/openvino_${OPENVINO_VERSION}/deployment_tools/inference_engine/lib/intel64/libinference_engine_lp_transformations.so \
+       /opt/openvino/lib && \
+    cp /opt/intel/openvino_${OPENVINO_VERSION}/deployment_tools/inference_engine/lib/intel64/libinference_engine_ir_reader.so \
+       /opt/openvino/lib && \
+    cp /opt/intel/openvino_${OPENVINO_VERSION}/deployment_tools/inference_engine/lib/intel64/libinference_engine_onnx_reader.so \
+       /opt/openvino/lib && \
+    (cd /opt/openvino/lib && \
+     chmod a-x * && \
+     ln -sf libtbb.so.2 libtbb.so && \
+     ln -sf libtbbmalloc.so.2 libtbbmalloc.so)
+'''
+
+    with open(FLAGS.output, "w") as dfile:
+        dfile.write(df)
+
 
 def dockerfile_for_linux(output_file):
     df = dockerfile_common()
@@ -109,8 +179,18 @@ RUN mkdir -p lib && \
     cp ${IPREFIX}/libinference_engine_lp_transformations.so lib/. && \
     cp ${IPREFIX}/libinference_engine_ir_reader.so lib/. && \
     cp ${IPREFIX}/libMKLDNNPlugin.so lib/. && \
-    cp /workspace/install/lib/libngraph.so lib/. && \
+'''
+
+    if (FLAGS.openvino_version.startswith("2021.2")):
+        df += '''cp /workspace/install/lib/libngraph.so lib/. && \
     cp /workspace/openvino/inference-engine/temp/omp/lib/libiomp5.so lib/.
+'''
+    else:
+        df += '''cp /workspace/install/deployment_tools/ngraph/lib/libngraph.so lib/. && \
+    cp /workspace/install/deployment_tools/inference_engine/external/omp/lib/libiomp5.so lib/.
+'''
+
+    df += '''
 RUN (cd lib && \
      for i in `find . -mindepth 1 -maxdepth 1 -type f -name '*\.so*'`; do \
         patchelf --set-rpath '$ORIGIN' $i; \
@@ -219,6 +299,11 @@ if __name__ == '__main__':
                         default='Release',
                         required=False,
                         help='CMAKE_BUILD_TYPE for OpenVINO build.')
+    parser.add_argument('--use-prebuilt-openvino',
+                        type=str,
+                        default="OFF",
+                        required=False,
+                        help='Whether or not to use prebuilt OpenVINO libraries from Intel.')
     parser.add_argument('--output',
                         type=str,
                         required=True,
@@ -236,4 +321,7 @@ if __name__ == '__main__':
     if target_platform() == 'windows':
         dockerfile_for_windows(FLAGS.output)
     else:
-        dockerfile_for_linux(FLAGS.output)
+        if (FLAGS.use_prebuilt_openvino == 'OFF'):
+            dockerfile_for_linux(FLAGS.output)
+        else:
+            dockerfile_for_linux_prebuilt(FLAGS.output)
