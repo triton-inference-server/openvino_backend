@@ -181,13 +181,13 @@ RUN mkdir -p lib && \
     cp ${IPREFIX}/libMKLDNNPlugin.so lib/. && \
 '''
 
-    if (FLAGS.openvino_version.startswith("2021.02")):
+    if (FLAGS.openvino_version.startswith("2021.2")):
         df += '''cp /workspace/install/lib/libngraph.so lib/. && \
-    cp /workspace/openvino/inference-engine/temp/omp/lib/libiomp5.so lib/. \
+    cp /workspace/openvino/inference-engine/temp/omp/lib/libiomp5.so lib/.
 '''
     else:
-        df += '''cp /workspace/install/lib/libngraph.so lib/. && \
-    cp /workspace/openvino/inference-engine/temp/omp/lib/libiomp5.so lib/. \
+        df += '''cp /workspace/install/deployment_tools/ngraph/lib/libngraph.so lib/. && \
+    cp /workspace/install/deployment_tools/inference_engine/external/omp/lib/libiomp5.so lib/.
 '''
 
     df += '''
