@@ -45,6 +45,7 @@ option(TRITON_ENABLE_STATS "Include statistics collections in backend" ON)
 set(TRITON_BUILD_CONTAINER "" CACHE STRING "Triton container to use a base for build")
 set(TRITON_BUILD_CONTAINER_VERSION "" CACHE STRING "Triton container version to target")
 set(TRITON_BUILD_OPENVINO_VERSION "" CACHE STRING "OpenVINO version to build")
+set(TRITON_BUILD_USE_PREBUILT_OPENVINO OFF CACHE BOOL "Uses prebuilt OpenVINO libraries from Intel")
 
 set(TRITON_BACKEND_REPO_TAG "main" CACHE STRING "Tag for triton-inference-server/backend repo")
 set(TRITON_CORE_REPO_TAG "main" CACHE STRING "Tag for triton-inference-server/core repo")
@@ -62,6 +63,10 @@ endif()
 
 if(WIN32 AND NOT TRITON_BUILD_CONTAINER)
   message(FATAL_ERROR "TRITON_BUILD_CONTAINER is required")
+endif()
+
+if(WIN32 AND TRITON_BUILD_USE_PREBUILT_OPENVINO)
+  message(FATAL_ERROR "TRITON_BUILD_USE_PREBUILT_OPENVINO not supported on WIN32")
 endif()
 
 if(NOT TRITON_BUILD_CONTAINER AND NOT TRITON_BUILD_CONTAINER_VERSION)
@@ -118,6 +123,10 @@ FetchContent_MakeAvailable(repo-common repo-core repo-backend)
 # Shared library implementing the Triton Backend API
 #
 configure_file(src/libtriton_openvino.ldscript libtriton_openvino.ldscript COPYONLY)
+
+if(TRITON_BUILD_OPENVINO_VERSION MATCHES "^2021.2")
+  add_definitions(-DIS_OPENVINO_2021_2=1)
+endif()
 
 add_library(
   triton-openvino-backend SHARED
@@ -202,7 +211,7 @@ else()
   add_custom_command(
     OUTPUT
       openvino/lib/${OPENVINO_LIBRARY}
-    COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/tools/gen_openvino_dockerfile.py --build-type="${CMAKE_BUILD_TYPE}" --triton-container="${TRITON_BUILD_CONTAINER}" --openvino-version="${TRITON_BUILD_OPENVINO_VERSION}" --output=Dockerfile.openvino
+    COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/tools/gen_openvino_dockerfile.py --build-type="${CMAKE_BUILD_TYPE}" --triton-container="${TRITON_BUILD_CONTAINER}" --openvino-version="${TRITON_BUILD_OPENVINO_VERSION}" --use-prebuilt-openvino="${TRITON_BUILD_USE_PREBUILT_OPENVINO}" --output=Dockerfile.openvino
     COMMAND docker build --cache-from=${TRITON_OPENVINO_DOCKER_IMAGE} --cache-from=${TRITON_OPENVINO_DOCKER_IMAGE}_cache0 --cache-from=${TRITON_OPENVINO_DOCKER_IMAGE}_cache1 -t ${TRITON_OPENVINO_DOCKER_IMAGE} -f ./Dockerfile.openvino ${CMAKE_CURRENT_SOURCE_DIR}
     COMMAND docker rm openvino_backend_ov || echo "error ignored..." || true
     COMMAND docker create --name openvino_backend_ov ${TRITON_OPENVINO_DOCKER_IMAGE}
