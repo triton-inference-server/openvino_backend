@@ -737,6 +737,7 @@ ModelInstanceState::ModelInstanceState(
   }
 
   if (model_state_->NetworkNotRead()) {
+    THROW_IF_BACKEND_INSTANCE_ERROR(model_state_->ParseParameters(device_));
     THROW_IF_BACKEND_INSTANCE_ERROR(
         model_state_->ReadNetwork(ArtifactFilename(), &model_path_));
     THROW_IF_BACKEND_INSTANCE_ERROR(model_state_->ParseParameters());
@@ -744,7 +745,6 @@ ModelInstanceState::ModelInstanceState(
   }
 
   if (model_state_->NetworkNotLoaded(device_)) {
-    THROW_IF_BACKEND_INSTANCE_ERROR(model_state_->ParseParameters(device_));
     // enable dynamic batching in the network
     std::map<std::string, std::string> network_config;
     if ((model_state_->MaxBatchSize() != 0) &&
