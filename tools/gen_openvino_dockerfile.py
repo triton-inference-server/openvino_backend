@@ -55,11 +55,17 @@ def dockerfile_for_linux(output_file):
     df += '''
 # Ensure apt-get won't prompt for selecting options
 ENV DEBIAN_FRONTEND=noninteractive
+
 RUN apt-get update && apt-get install -y --no-install-recommends \
         cmake \
         libglib2.0-dev \
         libtbb-dev \
-        patchelf
+        patchelf \
+        git \
+        make \
+        build-essential \
+        wget \
+        ca-certificates
 
 # Build instructions:
 # https://github.com/openvinotoolkit/openvino/wiki/BuildingForLinux
@@ -80,7 +86,7 @@ WORKDIR /workspace/openvino
 RUN git submodule update --init --recursive
 
 WORKDIR /workspace/openvino/build
-RUN cmake \
+RUN /bin/bash -c 'cmake \
         -DCMAKE_BUILD_TYPE=${OPENVINO_BUILD_TYPE} \
         -DCMAKE_INSTALL_PREFIX=/workspace/install \
         -DENABLE_VPU=OFF \
@@ -94,9 +100,9 @@ RUN cmake \
         -DNGRAPH_DEPRECATED_ENABLE=FALSE \
         .. && \
     TEMPCV_DIR=/workspace/openvino/inference-engine/temp/opencv_4* && \
-    OPENCV_DIRS=$(ls -d -1 ${TEMPCV_DIR} ) && \
+    OPENCV_DIRS=$(ls -d -1 ${TEMPCV_DIR}) && \
     export LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:${OPENCV_DIRS[0]}/opencv/lib && \
-    make -j$(nproc) install
+    make -j$(nproc) install'
 
 WORKDIR /opt/openvino
 ARG IPREFIX=/workspace/install/deployment_tools/inference_engine/lib/intel64
