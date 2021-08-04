@@ -236,6 +236,7 @@ ModelState::ParseParameters()
   triton::common::TritonJson::Value params;
   bool status = model_config_.Find("parameters", &params);
   if (status) {
+    RETURN_IF_ERROR(LoadCpuExtensions(params));
     RETURN_IF_ERROR(ParseBoolParameter(
         "SKIP_OV_DYNAMIC_BATCHSIZE", params, &skip_dynamic_batchsize_));
     RETURN_IF_ERROR(
@@ -255,7 +256,6 @@ ModelState::ParseParameters(const std::string& device)
   bool status = model_config_.Find("parameters", &params);
   if (status) {
     if (device == "CPU") {
-      RETURN_IF_ERROR(LoadCpuExtensions(params));
       config_[device] = {};
       auto& device_config = config_.at(device);
       RETURN_IF_ERROR(
@@ -737,14 +737,14 @@ ModelInstanceState::ModelInstanceState(
   }
 
   if (model_state_->NetworkNotRead()) {
-    THROW_IF_BACKEND_INSTANCE_ERROR(model_state_->ParseParameters(device_));
+    THROW_IF_BACKEND_INSTANCE_ERROR(model_state_->ParseParameters());
     THROW_IF_BACKEND_INSTANCE_ERROR(
         model_state_->ReadNetwork(ArtifactFilename(), &model_path_));
-    THROW_IF_BACKEND_INSTANCE_ERROR(model_state_->ParseParameters());
     THROW_IF_BACKEND_INSTANCE_ERROR(model_state_->ValidateConfigureNetwork());
   }
 
   if (model_state_->NetworkNotLoaded(device_)) {
+    THROW_IF_BACKEND_INSTANCE_ERROR(model_state_->ParseParameters(device_));
     // enable dynamic batching in the network
     std::map<std::string, std::string> network_config;
     if ((model_state_->MaxBatchSize() != 0) &&
