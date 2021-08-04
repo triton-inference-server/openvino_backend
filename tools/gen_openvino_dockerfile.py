@@ -55,22 +55,18 @@ def dockerfile_for_linux(output_file):
     df += '''
 # Ensure apt-get won't prompt for selecting options
 ENV DEBIAN_FRONTEND=noninteractive
-'''
-    dependencies =["cmake",
-                "libglib2.0-dev",
-                "libtbb-dev",
-                "patchelf",
-                "git", 
-                "make", 
-                "build-essential", 
-                "wget",
-                "ca-certificates"]
-    import sys
-    sys.path.append(FLAGS.common_repo_path + '/tools/')
-    import add_dependencies as ad
-    df += ad.add_dependencies(FLAGS.triton_container, dependencies)
 
-    df += '''
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        cmake \
+        libglib2.0-dev \
+        libtbb-dev \
+        patchelf \
+        git \
+        make \
+        build-essential \
+        wget \
+        ca-certificates
+
 # Build instructions:
 # https://github.com/openvinotoolkit/openvino/wiki/BuildingForLinux
 
@@ -105,7 +101,7 @@ RUN /bin/bash -c 'cmake \
         .. && \
     TEMPCV_DIR=/workspace/openvino/inference-engine/temp/opencv_4* && \
     OPENCV_DIRS=$(ls -d -1 ${TEMPCV_DIR}) && \
-    export LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:${OPENCV_DIRS[0]}/opencv/lib && echo ${LD_LIBRARY_PATH} && \
+    export LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:${OPENCV_DIRS[0]}/opencv/lib && \
     make -j$(nproc) install'
 
 WORKDIR /opt/openvino
@@ -240,10 +236,6 @@ if __name__ == '__main__':
         help=
         'Target for build, can be "ubuntu" or "windows". If not specified, build targets the current platform.'
     )
-    parser.add_argument('--common-repo-path',
-                        type=str,
-                        required=True,
-                        help='Path for add_dependencies.py.')
 
     FLAGS = parser.parse_args()
 
