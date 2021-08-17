@@ -117,3 +117,5 @@ string_value:"5"
 * Not all models support dynamic batch sizes.
 
 * The backend needs to be loaded in Triton in persistent mode, otherwise it might lead to segmentation fault while unloading.
+
+* Openvino does not natively support dynamic/variable shape tensors. If the outermost dimension is the only variable dimension (for batch models the outermost dimension is the batch dimension), we can set this dimension to a large value and enable ENABLE_BATCH_PADDING in the backend configuration as a work around. However, if any other dimension is dynamic i.e. -1, the model will not be supported in Openvino and hence is not supported by the Openvino backend in Triton.
