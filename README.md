@@ -1,5 +1,5 @@
 <!--
-# Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2021, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -116,4 +116,4 @@ string_value:"5"
 
 * Not all models support dynamic batch sizes.
 
-* The backend needs to be loaded in Triton in persistent mode, otherwise it might lead to segmentation fault while unloading.
+* As of now, the Openvino backend does not support variable shaped tensors. However, the dynamic batch sizes in the model are supported. See `SKIP_OV_DYNAMIC_BATCHSIZE` and `ENABLE_BATCH_PADDING` parameters for more details.
