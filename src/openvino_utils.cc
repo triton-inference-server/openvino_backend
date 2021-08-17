@@ -205,8 +205,8 @@ ModelConfigDataTypeToOpenVINOPrecision(const std::string& data_type_str)
     return InferenceEngine::Precision::I32;
   } else if (dtype == "INT64") {
     return InferenceEngine::Precision::I64;
-    //} else if (dtype == "FP16") {
-    //  return InferenceEngine::Precision::FP16;
+    } else if (dtype == "FP16") {
+     return InferenceEngine::Precision::FP16;
   } else if (dtype == "FP32") {
     return InferenceEngine::Precision::FP32;
   }
