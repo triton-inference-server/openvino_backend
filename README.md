@@ -42,7 +42,7 @@ questions or report problems in the main Triton [issues
 page](https://github.com/triton-inference-server/server/issues). The backend
 is designed to run models in Intermediate Representation (IR). See [here](https://docs.openvinotoolkit.org/latest/openvino_docs_MO_DG_prepare_model_convert_model_Converting_Model.html) for instruction to convert a model to IR format. The backend is implemented using openVINO C++ API. Auto completion of the model config is not supported in the backend and complete `config.pbtxt` must be provided with the model.
 
-## Supported Devices
+F## Supported Devices
 OpenVINO backend currently supports inference only on CPU devices using [OpenVINO CPU plugin](https://docs.openvinotoolkit.org/latest/openvino_docs_IE_DG_supported_plugins_CPU.html). Note the CPU plugin does not support
 iGPU.
 

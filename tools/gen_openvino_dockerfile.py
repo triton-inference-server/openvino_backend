@@ -178,7 +178,7 @@ RUN copy \\workspace\\install\\deployment_tools\\inference_engine\\external\\tbb
         df += '''
 RUN copy \\workspace\\install\\deployment_tools\\inference_engine\\lib\\intel64\\%OPENVINO_BUILD_TYPE%\\inference_engine_ir_reader.dll bin\\inference_engine_ir_reader.dll
 '''
-        if FLAGS.openvino_version == "2021.2":
+        if FLAGS.openvino_version == "2021.4":
             df += '''
 RUN copy \\workspace\\install\\lib\\ngraph.dll bin\\ngraph.dll
 RUN copy \\workspace\\install\\lib\\ngraph.lib lib\\ngraph.lib
@@ -194,7 +194,7 @@ RUN copy \\workspace\\install\\deployment_tools\\inference_engine\\lib\\intel64\
 RUN copy \\workspace\\install\\deployment_tools\\inference_engine\\external\\tbb\\bin\\tbb_debug.dll bin\\tbb_debug.dll
 RUN copy \\workspace\\install\\deployment_tools\\inference_engine\\external\\tbb\\lib\\tbb_debug.lib lib\\tbb_debug.lib
 '''
-        if FLAGS.openvino_version == "2021.2":
+        if FLAGS.openvino_version == "2021.4":
             df += '''
 RUN copy \\workspace\\install\\lib\\ngraphd.dll bin\\ngraphd.dll
 RUN copy \\workspace\\install\\lib\\ngraphd.lib lib\\ngraphd.lib
