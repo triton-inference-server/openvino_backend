@@ -592,7 +592,7 @@ ModelState::ValidateOutputs()
     if (openvino_precision == InferenceEngine::Precision::UNSPECIFIED) {
       return TRITONSERVER_ErrorNew(
           TRITONSERVER_ERROR_INTERNAL,
-          (std::string("unsupported datatype ") + io_dtype + " for input '" +
+          (std::string("unsupported datatype ") + io_dtype + " for output '" +
            io_name + "' for model '" + Name() + "'")
               .c_str());
     }
