@@ -151,7 +151,7 @@ WORKDIR /workspace/openvino
 RUN git submodule update --init --recursive
 
 WORKDIR /workspace/openvino/build
-ARG VS_DEVCMD_BAT="call \BuildTools\Common7\Tools\VsDevCmd.bat"
+ARG VS_DEVCMD_BAT="call \BuildTools\VC\Auxiliary\Build\vcvars64.bat"
 ARG CMAKE_BAT="cmake \
           -DCMAKE_BUILD_TYPE=%OPENVINO_BUILD_TYPE% \
           -DCMAKE_INSTALL_PREFIX=C:/workspace/install \
