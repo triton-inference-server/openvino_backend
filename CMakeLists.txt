@@ -76,6 +76,7 @@ endif()
 set(TRITON_OPENVINO_INCLUDE_PATHS "${CMAKE_CURRENT_BINARY_DIR}/openvino/include")
 set(TRITON_OPENVINO_LIB_PATHS "${CMAKE_CURRENT_BINARY_DIR}/openvino/lib")
 set(TRITON_OPENVINO_DOCKER_IMAGE "tritonserver_openvino")
+set(TRITON_OPENVINO_DOCKER_MEMORY "16g")
 if (WIN32)
   if (${CMAKE_BUILD_TYPE} STREQUAL "Debug")
     set(OPENVINO_LIBRARY "inference_engined.lib")
@@ -190,7 +191,7 @@ if (WIN32)
     OUTPUT
       openvino/lib/${OPENVINO_LIBRARY}
     COMMAND python3 ${CMAKE_CURRENT_SOURCE_DIR}/tools/gen_openvino_dockerfile.py --build-type="${CMAKE_BUILD_TYPE}" --triton-container="${TRITON_BUILD_CONTAINER}" --openvino-version="${TRITON_BUILD_OPENVINO_VERSION}" --output=Dockerfile.openvino
-    COMMAND docker build --cache-from=${TRITON_OPENVINO_DOCKER_IMAGE} --cache-from=${TRITON_OPENVINO_DOCKER_IMAGE}_cache0 --cache-from=${TRITON_OPENVINO_DOCKER_IMAGE}_cache1 -t ${TRITON_OPENVINO_DOCKER_IMAGE} -f ./Dockerfile.openvino ${CMAKE_CURRENT_SOURCE_DIR}
+    COMMAND docker build --memory ${TRITON_OPENVINO_DOCKER_MEMORY}--cache-from=${TRITON_OPENVINO_DOCKER_IMAGE} --cache-from=${TRITON_OPENVINO_DOCKER_IMAGE}_cache0 --cache-from=${TRITON_OPENVINO_DOCKER_IMAGE}_cache1 -t ${TRITON_OPENVINO_DOCKER_IMAGE} -f ./Dockerfile.openvino ${CMAKE_CURRENT_SOURCE_DIR}
     COMMAND powershell.exe -noprofile -c "docker rm openvino_backend_ov > $null 2>&1; if ($LASTEXITCODE) { 'error ignored...' }; exit 0"
     COMMAND docker create --name openvino_backend_ov ${TRITON_OPENVINO_DOCKER_IMAGE}
     COMMAND rmdir /s/q openvino
