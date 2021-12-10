@@ -45,6 +45,7 @@ option(TRITON_ENABLE_STATS "Include statistics collections in backend" ON)
 set(TRITON_BUILD_CONTAINER "" CACHE STRING "Triton container to use a base for build")
 set(TRITON_BUILD_CONTAINER_VERSION "" CACHE STRING "Triton container version to target")
 set(TRITON_BUILD_OPENVINO_VERSION "" CACHE STRING "OpenVINO version to build")
+set(TRITON_OPENVINO_BACKEND_INSTALLDIR "openvino" CACHE STRING "The directory name to install openVINO backend")
 set(TRITON_BUILD_USE_PREBUILT_OPENVINO OFF CACHE BOOL "Uses prebuilt OpenVINO libraries from Intel")
 
 set(TRITON_BACKEND_REPO_TAG "main" CACHE STRING "Tag for triton-inference-server/backend repo")
@@ -243,7 +244,7 @@ set(INSTALL_CONFIGDIR ${CMAKE_INSTALL_LIBDIR}/cmake/TritonOpenVINOBackend)
 install(
   DIRECTORY
     ${CMAKE_CURRENT_BINARY_DIR}/openvino/
-  DESTINATION ${CMAKE_INSTALL_PREFIX}/backends/openvino
+  DESTINATION ${CMAKE_INSTALL_PREFIX}/backends/${TRITON_OPENVINO_BACKEND_INSTALLDIR}
   PATTERN *lib EXCLUDE
   PATTERN *bin EXCLUDE
   PATTERN *include EXCLUDE
@@ -255,14 +256,14 @@ if (NOT WIN32)
       triton-openvino-backend
     EXPORT
       triton-openvino-backend-targets
-    LIBRARY DESTINATION ${CMAKE_INSTALL_PREFIX}/backends/openvino
+    LIBRARY DESTINATION ${CMAKE_INSTALL_PREFIX}/backends/${TRITON_OPENVINO_BACKEND_INSTALLDIR}
   )
 
   install(
     DIRECTORY
       ${CMAKE_CURRENT_BINARY_DIR}/openvino/lib/
     USE_SOURCE_PERMISSIONS
-    DESTINATION ${CMAKE_INSTALL_PREFIX}/backends/openvino
+    DESTINATION ${CMAKE_INSTALL_PREFIX}/backends/${TRITON_OPENVINO_BACKEND_INSTALLDIR}
   )
 else()
   install(
@@ -270,14 +271,14 @@ else()
       triton-openvino-backend
     EXPORT
       triton-openvino-backend-targets
-    RUNTIME DESTINATION ${CMAKE_INSTALL_PREFIX}/backends/openvino
+    RUNTIME DESTINATION ${CMAKE_INSTALL_PREFIX}/backends/${TRITON_OPENVINO_BACKEND_INSTALLDIR}
   )
 
   install(
     DIRECTORY
       ${CMAKE_CURRENT_BINARY_DIR}/openvino/bin/
     USE_SOURCE_PERMISSIONS
-    DESTINATION ${CMAKE_INSTALL_PREFIX}/backends/openvino
+    DESTINATION ${CMAKE_INSTALL_PREFIX}/backends/${TRITON_OPENVINO_BACKEND_INSTALLDIR}
   )
 endif() # WIN32
 
