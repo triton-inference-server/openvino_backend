@@ -62,6 +62,12 @@ if(NOT TRITON_BUILD_OPENVINO_VERSION)
   message(FATAL_ERROR "TRITON_BUILD_OPENVINO_VERSION is required")
 endif()
 
+if(TRITON_BUILD_OPENVINO_VERSION MATCHES "^([0-9]+)[\.]([0-9]+)[\.0-9]*$")
+  set(TRITON_OPENVINO_VERSION "${CMAKE_MATCH_1}${CMAKE_MATCH_2}")
+else()
+  message(FATAL_ERROR "TRITON_BUILD_OPENVINO_VERSION should be in the format <major>.<minor>[.<build_num>]")
+endif()
+
 if(WIN32 AND NOT TRITON_BUILD_CONTAINER)
   message(FATAL_ERROR "TRITON_BUILD_CONTAINER is required")
 endif()
@@ -126,10 +132,6 @@ FetchContent_MakeAvailable(repo-common repo-core repo-backend)
 #
 configure_file(src/libtriton_openvino.ldscript libtriton_openvino.ldscript COPYONLY)
 
-if(TRITON_BUILD_OPENVINO_VERSION MATCHES "^2021.2")
-  add_definitions(-DIS_OPENVINO_2021_2=1)
-endif()
-
 add_library(
   triton-openvino-backend SHARED
   src/openvino.cc
@@ -154,6 +156,11 @@ target_compile_options(
   $<$<OR:$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:AppleClang>,$<CXX_COMPILER_ID:GNU>>:
     -Wall -Wextra -Wno-unused-parameter -Wno-type-limits -Werror>
   $<$<CXX_COMPILER_ID:MSVC>:/Wall /D_WIN32_WINNT=0x0A00 /EHsc>
+)
+
+target_compile_definitions(
+  triton-openvino-backend
+    PRIVATE TRITON_OPENVINO_VERSION=${TRITON_OPENVINO_VERSION}
 )
 
 set_target_properties(

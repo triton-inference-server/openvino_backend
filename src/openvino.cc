@@ -35,6 +35,8 @@
 #include "triton/backend/backend_model_instance.h"
 #include "triton/backend/backend_output_responder.h"
 
+#define OPENVINO_2021_2 20212
+
 //
 // OpenVINO Backend that implements the TRITONBACKEND API.
 //
@@ -142,7 +144,7 @@ ModelState::Create(TRITONBACKEND_Model* triton_model, ModelState** state)
         std::string("unexpected nullptr in BackendModelException"));
     RETURN_IF_ERROR(ex.err_);
   }
-#if IS_OPENVINO_2021_2
+#if TRITON_OPENVINO_VERSION == OPENVINO_2021_2
   catch (const InferenceEngine::details::InferenceEngineException& e) {
     return TRITONSERVER_ErrorNew(
         TRITONSERVER_ERROR_INTERNAL,
@@ -289,7 +291,7 @@ ModelState::LoadCpuExtensions(triton::common::TritonJson::Value& params)
   if (!cpu_ext_path.empty()) {
     // CPU (MKLDNN) extensions is loaded as a shared library and passed as a
     // pointer to base extension
-#if IS_OPENVINO_2021_2
+#if TRITON_OPENVINO_VERSION == OPENVINO_2021_2
     const auto extension_ptr =
         InferenceEngine::make_so_pointer<InferenceEngine::IExtension>(
             cpu_ext_path);
@@ -723,7 +725,7 @@ ModelInstanceState::Create(
         std::string("unexpected nullptr in BackendModelInstanceException"));
     RETURN_IF_ERROR(ex.err_);
   }
-#if IS_OPENVINO_2021_2
+#if TRITON_OPENVINO_VERSION == OPENVINO_2021_2
   catch (const InferenceEngine::details::InferenceEngineException& e) {
     return TRITONSERVER_ErrorNew(
         TRITONSERVER_ERROR_INTERNAL,
