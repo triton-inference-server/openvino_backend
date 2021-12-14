@@ -115,6 +115,12 @@ RUN mkdir -p /opt/openvino/lib && \
      ln -sf libtbb.so.2 libtbb.so && \
      ln -sf libtbbmalloc.so.2 libtbbmalloc.so)
 '''
+    df += '''
+RUN (cd lib && \
+     for i in `find . -mindepth 1 -maxdepth 1 -type f -name '*\.so*'`; do \
+        patchelf --set-rpath '$ORIGIN' $i; \
+     done)
+'''
 
     with open(FLAGS.output, "w") as dfile:
         dfile.write(df)
