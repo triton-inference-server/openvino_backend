@@ -64,6 +64,11 @@ endif()
 
 if(TRITON_BUILD_OPENVINO_VERSION MATCHES "^([0-9]+)[\.]([0-9]+)[\.0-9]*$")
   set(TRITON_OPENVINO_VERSION "${CMAKE_MATCH_1}${CMAKE_MATCH_2}")
+  if(TRITON_BUILD_USE_PREBUILT_OPENVINO)
+    set(TRITON_OPENVINO_BACKEND_LIBNAME triton_openvino_${CMAKE_MATCH_1}_${CMAKE_MATCH_2}_pre)
+  else()
+    set(TRITON_OPENVINO_BACKEND_LIBNAME triton_openvino_${CMAKE_MATCH_1}_${CMAKE_MATCH_2})
+  endif()
 else()
   message(FATAL_ERROR "TRITON_BUILD_OPENVINO_VERSION should be in the format <major>.<minor>[.<build_num>]")
 endif()
@@ -167,7 +172,7 @@ set_target_properties(
   triton-openvino-backend
   PROPERTIES
     POSITION_INDEPENDENT_CODE ON
-    OUTPUT_NAME triton_openvino
+    OUTPUT_NAME ${TRITON_OPENVINO_BACKEND_LIBNAME}
     SKIP_BUILD_RPATH TRUE
     BUILD_WITH_INSTALL_RPATH TRUE
     INSTALL_RPATH_USE_LINK_PATH FALSE
