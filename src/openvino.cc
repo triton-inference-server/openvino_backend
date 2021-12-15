@@ -35,6 +35,8 @@
 #include "triton/backend/backend_model_instance.h"
 #include "triton/backend/backend_output_responder.h"
 
+#define OPENVINO_2021_2 20212
+
 //
 // OpenVINO Backend that implements the TRITONBACKEND API.
 //
@@ -142,6 +144,7 @@ ModelState::Create(TRITONBACKEND_Model* triton_model, ModelState** state)
         std::string("unexpected nullptr in BackendModelException"));
     RETURN_IF_ERROR(ex.err_);
   }
+#if TRITON_OPENVINO_VERSION == OPENVINO_2021_2
   catch (const InferenceEngine::details::InferenceEngineException& e) {
     return TRITONSERVER_ErrorNew(
         TRITONSERVER_ERROR_INTERNAL,
@@ -149,6 +152,15 @@ ModelState::Create(TRITONBACKEND_Model* triton_model, ModelState** state)
          e.what())
             .c_str());
   }
+#else
+  catch (const InferenceEngine::Exception& e) {
+    return TRITONSERVER_ErrorNew(
+        TRITONSERVER_ERROR_INTERNAL,
+        (std::string("ModelState::Create InferenceEngine::Exception: ") +
+         e.what())
+            .c_str());
+  }
+#endif
   catch (...) {
     return TRITONSERVER_ErrorNew(
         TRITONSERVER_ERROR_INTERNAL, "ModelState::Create exception");
@@ -279,9 +291,14 @@ ModelState::LoadCpuExtensions(triton::common::TritonJson::Value& params)
   if (!cpu_ext_path.empty()) {
     // CPU (MKLDNN) extensions is loaded as a shared library and passed as a
     // pointer to base extension
+#if TRITON_OPENVINO_VERSION == OPENVINO_2021_2
     const auto extension_ptr =
         InferenceEngine::make_so_pointer<InferenceEngine::IExtension>(
             cpu_ext_path);
+#else
+    const auto extension_ptr =
+        std::make_shared<InferenceEngine::Extension>(cpu_ext_path);
+#endif
     RETURN_IF_OPENVINO_ERROR(
         inference_engine_.AddExtension(extension_ptr),
         " loading custom CPU extensions");
@@ -708,6 +725,7 @@ ModelInstanceState::Create(
         std::string("unexpected nullptr in BackendModelInstanceException"));
     RETURN_IF_ERROR(ex.err_);
   }
+#if TRITON_OPENVINO_VERSION == OPENVINO_2021_2
   catch (const InferenceEngine::details::InferenceEngineException& e) {
     return TRITONSERVER_ErrorNew(
         TRITONSERVER_ERROR_INTERNAL,
@@ -715,6 +733,15 @@ ModelInstanceState::Create(
          e.what())
             .c_str());
   }
+#else
+  catch (const InferenceEngine::Exception& e) {
+    return TRITONSERVER_ErrorNew(
+        TRITONSERVER_ERROR_INTERNAL,
+        (std::string("ModelState::Create InferenceEngine::Exception: ") +
+         e.what())
+            .c_str());
+  }
+#endif
   catch (...) {
     return TRITONSERVER_ErrorNew(
         TRITONSERVER_ERROR_INTERNAL, "ModelState::Create exception");
