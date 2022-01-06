@@ -36,15 +36,6 @@
 
 namespace triton { namespace backend { namespace openvino {
 
-#define RESPOND_ALL_AND_RETURN_IF_ERROR(RESPONSES, RESPONSES_COUNT, X) \
-  do {                                                                 \
-    TRITONSERVER_Error* raarie_err__ = (X);                            \
-    if (raarie_err__ != nullptr) {                                     \
-      SendErrorForResponses(RESPONSES, RESPONSES_COUNT, raarie_err__); \
-      return;                                                          \
-    }                                                                  \
-  } while (false)
-
 #define RETURN_IF_OPENVINO_ASSIGN_ERROR(V, S, M)                      \
   do {                                                                \
     std::string error_str;                                            \
@@ -84,53 +75,6 @@ namespace triton { namespace backend { namespace openvino {
               .c_str());                                              \
     }                                                                 \
   } while (false)
-
-#define RESPOND_ALL_AND_RETURN_IF_OPENVINO_ASSIGN_ERROR(V, R, C, S, M)    \
-  do {                                                                    \
-    std::string error_str;                                                \
-    try {                                                                 \
-      V = (S);                                                            \
-    }                                                                     \
-    catch (const std::exception& error) {                                 \
-      error_str = error.what();                                           \
-    }                                                                     \
-    catch (...) {                                                         \
-      error_str = "unknown/internal exception happened";                  \
-    }                                                                     \
-    if (!error_str.empty()) {                                             \
-      SendErrorForResponses(                                              \
-          R, C,                                                           \
-          TRITONSERVER_ErrorNew(                                          \
-              TRITONSERVER_ERROR_INTERNAL,                                \
-              (std::string("openvino error in ") + M + " : " + error_str) \
-                  .c_str()));                                             \
-      return;                                                             \
-    }                                                                     \
-  } while (false)
-
-#define RESPOND_ALL_AND_RETURN_IF_OPENVINO_ERROR(R, C, S, M)              \
-  do {                                                                    \
-    std::string error_str;                                                \
-    try {                                                                 \
-      (S);                                                                \
-    }                                                                     \
-    catch (const std::exception& error) {                                 \
-      error_str = error.what();                                           \
-    }                                                                     \
-    catch (...) {                                                         \
-      error_str = "unknown/internal exception happened.";                 \
-    }                                                                     \
-    if (!error_str.empty()) {                                             \
-      SendErrorForResponses(                                              \
-          R, C,                                                           \
-          TRITONSERVER_ErrorNew(                                          \
-              TRITONSERVER_ERROR_INTERNAL,                                \
-              (std::string("openvino error in ") + M + " : " + error_str) \
-                  .c_str()));                                             \
-      return;                                                             \
-    }                                                                     \
-  } while (false)
-
 
 std::string ConvertVersionMapToString(
     const std::map<std::string, InferenceEngine::Version>& version_map);
