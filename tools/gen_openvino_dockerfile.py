@@ -181,14 +181,13 @@ RUN /bin/bash -c 'cmake \
     make -j$(nproc) install'
 
 WORKDIR /opt/openvino
-ARG IPREFIX=/workspace/install/runtime/lib/intel64/
 RUN cp -r /workspace/openvino/licensing LICENSE.openvino
 RUN mkdir -p include && \
     cp -r /workspace/install/runtime/include/ie/* include/. && \
     cp -r /workspace/install/runtime/include/ngraph include/. && \
     cp -r /workspace/install/runtime/include/openvino include/.
 RUN mkdir -p lib && \
-    cp ${IPREFIX}/*.so lib/. && \
+    cp /workspace/install/runtime/lib/intel64/*.so lib/. && \
     cp /workspace/install/runtime/3rdparty/omp/lib/libiomp5.so lib/.
 '''
 
@@ -222,6 +221,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Build instructions:
 # https://github.com/openvinotoolkit/openvino/wiki/BuildingForLinux
 
+ARG OPENVINO_VERSION
+ARG OPENVINO_BUILD_TYPE
 WORKDIR /workspace
 
 # When git cloning it is important that we include '-b' and branchname

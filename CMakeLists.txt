@@ -235,6 +235,11 @@ target_link_libraries(
 #
 # Build the OpenVINO libraries using docker.
 #
+if(TRITON_BUILD_OPENVINO_COMMIT_VERSION)
+  set(OPENVINO_CPU_PLUGIN_NAME "libopenvino_intel_cpu_plugin.so")
+else()
+  set(OPENVINO_CPU_PLUGIN_NAME "libMKLDNNPlugin.so")
+endif()
 if (WIN32)
   add_custom_command(
     OUTPUT
@@ -259,7 +264,7 @@ else()
     COMMAND rm -fr openvino
     COMMAND docker cp openvino_backend_ov:/opt/openvino openvino
     COMMAND docker rm openvino_backend_ov
-    COMMAND echo '<ie><plugins><plugin name=\"CPU\" location=\"libMKLDNNPlugin.so\"></plugin></plugins></ie>' >> openvino/lib/plugins.xml
+    COMMAND echo '<ie><plugins><plugin name=\"CPU\" location=\"${OPENVINO_CPU_PLUGIN_NAME}\"></plugin></plugins></ie>' >> openvino/lib/plugins.xml
     COMMENT "Building OpenVino"
   )
 endif() # WIN32

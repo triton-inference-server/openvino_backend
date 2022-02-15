@@ -729,7 +729,7 @@ ModelInstanceState::Create(
   catch (const InferenceEngine::details::InferenceEngineException& e) {
     return TRITONSERVER_ErrorNew(
         TRITONSERVER_ERROR_INTERNAL,
-        (std::string("ModelState::Create InferenceEngineException: ") +
+        (std::string("ModelInstanceState::Create InferenceEngineException: ") +
          e.what())
             .c_str());
   }
@@ -737,14 +737,14 @@ ModelInstanceState::Create(
   catch (const InferenceEngine::Exception& e) {
     return TRITONSERVER_ErrorNew(
         TRITONSERVER_ERROR_INTERNAL,
-        (std::string("ModelState::Create InferenceEngine::Exception: ") +
+        (std::string("ModelInstanceState::Create InferenceEngine::Exception: ") +
          e.what())
             .c_str());
   }
 #endif
   catch (...) {
     return TRITONSERVER_ErrorNew(
-        TRITONSERVER_ERROR_INTERNAL, "ModelState::Create exception");
+        TRITONSERVER_ERROR_INTERNAL, "ModelInstanceState::Create exception");
   }
 
   return nullptr;  // success
