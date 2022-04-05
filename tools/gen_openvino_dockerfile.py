@@ -138,6 +138,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends \
         cmake \
         libglib2.0-dev \
+        libusb-1.0-0-dev \
         libtbb-dev \
         patchelf \
         git \
@@ -210,6 +211,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends \
         cmake \
         libglib2.0-dev \
+        libusb-1.0-0-dev \
         libtbb-dev \
         patchelf \
         git \
