@@ -227,7 +227,7 @@ ModelState::ParseParameters()
 {
   triton::common::TritonJson::Value params;
   bool status = model_config_.Find("parameters", &params);
-  if (status) {
+  if (status && !params.IsEmpty()) {
     RETURN_IF_ERROR(LoadCpuExtensions(params));
     RETURN_IF_ERROR(ParseBoolParameter(
         "SKIP_OV_DYNAMIC_BATCHSIZE", params, &skip_dynamic_batchsize_));
@@ -246,7 +246,7 @@ ModelState::ParseParameters(const std::string& device)
   // Validate and set parameters
   triton::common::TritonJson::Value params;
   bool status = model_config_.Find("parameters", &params);
-  if (status) {
+  if (status && !params.IsEmpty()) {
     if (device == "CPU") {
       config_[device] = {};
       auto& device_config = config_.at(device);
@@ -267,7 +267,7 @@ TRITONSERVER_Error*
 ModelState::LoadCpuExtensions(triton::common::TritonJson::Value& params)
 {
   std::string cpu_ext_path;
-  ReadParameter(params, "CPU_EXTENSION_PATH", &(cpu_ext_path));
+  RETURN_IF_ERROR(ReadParameter(params, "CPU_EXTENSION_PATH", &(cpu_ext_path)));
   if (!cpu_ext_path.empty()) {
     // CPU (MKLDNN) extensions is loaded as a shared library and passed as a
     // pointer to base extension
@@ -292,7 +292,7 @@ ModelState::ParseBoolParameter(
     bool* setting)
 {
   std::string value;
-  ReadParameter(params, mkey, &(value));
+  RETURN_IF_ERROR(ReadParameter(params, mkey, &(value)));
   std::transform(
       value.begin(), value.end(), value.begin(),
       [](unsigned char c) { return std::tolower(c); });
@@ -309,7 +309,7 @@ ModelState::ParseParameter(
     std::map<std::string, std::string>* device_config)
 {
   std::string value;
-  ReadParameter(params, mkey, &(value));
+  RETURN_IF_ERROR(ReadParameter(params, mkey, &(value)));
   if (!value.empty()) {
     std::string ov_key;
     RETURN_IF_ERROR(ParseParameterHelper(mkey, &ov_key, &value));
