@@ -227,7 +227,7 @@ ModelState::ParseParameters()
 {
   triton::common::TritonJson::Value params;
   bool status = model_config_.Find("parameters", &params);
-  if (status && !params.IsEmpty()) {
+  if (status) {
     RETURN_IF_ERROR(LoadCpuExtensions(params));
     RETURN_IF_ERROR(ParseBoolParameter(
         "SKIP_OV_DYNAMIC_BATCHSIZE", params, &skip_dynamic_batchsize_));
@@ -246,7 +246,7 @@ ModelState::ParseParameters(const std::string& device)
   // Validate and set parameters
   triton::common::TritonJson::Value params;
   bool status = model_config_.Find("parameters", &params);
-  if (status && !params.IsEmpty()) {
+  if (status) {
     if (device == "CPU") {
       config_[device] = {};
       auto& device_config = config_.at(device);
