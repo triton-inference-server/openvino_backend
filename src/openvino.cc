@@ -267,7 +267,9 @@ TRITONSERVER_Error*
 ModelState::LoadCpuExtensions(triton::common::TritonJson::Value& params)
 {
   std::string cpu_ext_path;
-  RETURN_IF_ERROR(ReadParameter(params, "CPU_EXTENSION_PATH", &(cpu_ext_path)));
+  LOG_IF_ERROR(
+      ReadParameter(params, "CPU_EXTENSION_PATH", &(cpu_ext_path)),
+      "error when reading parameters");
   if (!cpu_ext_path.empty()) {
     // CPU (MKLDNN) extensions is loaded as a shared library and passed as a
     // pointer to base extension
@@ -292,7 +294,8 @@ ModelState::ParseBoolParameter(
     bool* setting)
 {
   std::string value;
-  RETURN_IF_ERROR(ReadParameter(params, mkey, &(value)));
+  LOG_IF_ERROR(
+      ReadParameter(params, mkey, &(value)), "error when reading parameters");
   std::transform(
       value.begin(), value.end(), value.begin(),
       [](unsigned char c) { return std::tolower(c); });
@@ -309,7 +312,9 @@ ModelState::ParseParameter(
     std::map<std::string, std::string>* device_config)
 {
   std::string value;
-  RETURN_IF_ERROR(ReadParameter(params, mkey, &(value)));
+  LOG_IF_ERROR(
+      ReadParameter(params, mkey, &(value)), "error when reading parameters");
+
   if (!value.empty()) {
     std::string ov_key;
     RETURN_IF_ERROR(ParseParameterHelper(mkey, &ov_key, &value));

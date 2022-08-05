@@ -1,4 +1,4 @@
-// Copyright 2021-2022, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -330,9 +330,10 @@ ReadParameter(
     std::string* param)
 {
   triton::common::TritonJson::Value value;
-  if (params.Find(key.c_str(), &value)) {
-    RETURN_IF_ERROR(value.MemberAsString("string_value", param));
-  }
+  RETURN_ERROR_IF_FALSE(
+      params.Find(key.c_str(), &value), TRITONSERVER_ERROR_INVALID_ARG,
+      std::string("model configuration is missing the parameter ") + key);
+  RETURN_IF_ERROR(value.MemberAsString("string_value", param));
   return nullptr;  // success
 }
 
