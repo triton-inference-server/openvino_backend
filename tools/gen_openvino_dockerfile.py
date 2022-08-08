@@ -167,54 +167,16 @@ RUN build.bat
 
 WORKDIR /opt/openvino
 RUN xcopy /I /E \\workspace\\openvino\\licensing LICENSE.openvino
-RUN xcopy /I /E \\workspace\\install\\deployment_tools\\inference_engine\\include include
-RUN xcopy /I /E \\workspace\\install\\deployment_tools\\inference_engine\\bin\\intel64\\%OPENVINO_BUILD_TYPE% bin
-RUN xcopy /I /E \\workspace\\install\\deployment_tools\\inference_engine\\lib\\intel64\\%OPENVINO_BUILD_TYPE% lib
-RUN copy \\workspace\\install\\deployment_tools\\inference_engine\\external\\tbb\\bin\\tbb.dll bin\\tbb.dll
-RUN copy \\workspace\\install\\deployment_tools\\inference_engine\\external\\tbb\\lib\\tbb.lib lib\\tbb.lib
-'''
-    
-    if FLAGS.build_type != "Debug":
-        if FLAGS.openvino_version == "2021.4":
-            df += '''
-RUN copy \\workspace\\install\\deployment_tools\\inference_engine\\bin\\intel64\\%OPENVINO_BUILD_TYPE%\\inference_engine_ir_reader.dll bin\\inference_engine_ir_reader.dll
-'''
-        else:
-            df += '''
-RUN copy \\workspace\\install\\deployment_tools\\inference_engine\\lib\\intel64\\%OPENVINO_BUILD_TYPE%\\inference_engine_ir_reader.dll bin\\inference_engine_ir_reader.dll
-'''
-        if FLAGS.openvino_version == "2021.2":
-            df += '''
-RUN copy \\workspace\\install\\lib\\ngraph.dll bin\\ngraph.dll
-RUN copy \\workspace\\install\\lib\\ngraph.lib lib\\ngraph.lib
-'''
-        else:
-            df += '''
-RUN copy \\workspace\\install\\deployment_tools\\ngraph\\lib\\ngraph.dll bin\\ngraph.dll
-RUN copy \\workspace\\install\\deployment_tools\\ngraph\\lib\\ngraph.lib lib\\ngraph.lib
-'''
-    else:
-        if FLAGS.openvino_version == "2021.4":
-            df += '''
-RUN copy \\workspace\\install\\deployment_tools\\inference_engine\\bin\\intel64\\%OPENVINO_BUILD_TYPE%\\inference_engine_ir_readerd.dll bin\\inference_engine_ir_readerd.dll
-'''
-        else:
-            df += '''
-RUN copy \\workspace\\install\\deployment_tools\\inference_engine\\lib\\intel64\\%OPENVINO_BUILD_TYPE%\\inference_engine_ir_readerd.dll bin\\inference_engine_ir_readerd.dll
-'''
-        df += '''
-RUN copy \\workspace\\install\\deployment_tools\\inference_engine\\external\\tbb\\bin\\tbb_debug.dll bin\\tbb_debug.dll
-RUN copy \\workspace\\install\\deployment_tools\\inference_engine\\external\\tbb\\lib\\tbb_debug.lib lib\\tbb_debug.lib
-'''
-        if FLAGS.openvino_version == "2021.2":
-            df += '''
-RUN copy \\workspace\\install\\lib\\ngraphd.dll bin\\ngraphd.dll
-RUN copy \\workspace\\install\\lib\\ngraphd.lib lib\\ngraphd.lib
-'''
-        else:
-            df += '''
-RUN copy \\workspace\\install\\deployment_tools\\ngraph\\lib\\ngraphd.dll bin\\ngraphd.dll
-RUN copy \\workspace\\install\\deployment_tools\\ngraph\\lib\\ngraphd.lib lib\\ngraphd.lib
+RUN mkdir include
+RUN xcopy /I /E \\workspace\\install\\runtime\\include\\ie include
+RUN xcopy /I /E \\workspace\\install\\runtime\\include\\ngraph include\\ngraph
+RUN xcopy /I /E \\workspace\\install\\runtime\\include\\openvino include\\openvino
+RUN xcopy /I /E \\workspace\\install\\runtime\\bin\\intel64\\%OPENVINO_BUILD_TYPE% bin
+RUN xcopy /I /E \\workspace\\install\\runtime\\lib\\intel64\\%OPENVINO_BUILD_TYPE% lib
+RUN copy \\workspace\\install\\runtime\\3rdparty\\tbb\\bin\\tbb.dll bin\\tbb.dll
+RUN copy \\workspace\\install\\runtime\\3rdparty\\tbb\\bin\\tbb_debug.dll bin\\tbb_debug.dll
+RUN copy \\workspace\\install\\runtime\\3rdparty\\tbb\\lib\\tbb.lib lib\\tbb.lib
+RUN copy \\workspace\\install\\runtime\\3rdparty\\tbb\\lib\\tbb_debug.lib lib\\tbb_debug.lib
 '''
 
     with open(FLAGS.output, "w") as dfile:
