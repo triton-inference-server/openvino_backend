@@ -1,5 +1,5 @@
 <!--
-# Copyright (c) 2021, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# Copyright 2021-2022, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -82,10 +82,10 @@ Configuration of OpenVINO for a model is done through the Parameters section of 
 * `ENFORCE_BF16`: Enforcing of floating point operations execution in bfloat16 precision on platforms with native bfloat16 support. Possible values are `YES` or `NO`.
 * `CPU_BIND_THREAD`: Enable threads->cores (`YES`, default), threads->(NUMA)nodes (`NUMA`) or completely disable (`NO`) CPU threads pinning for CPU-involved inference.
 * `CPU_THROUGHPUT_STREAMS`: Number of streams to use for inference on the CPU. Default value is determined automatically for a device. Please note that although the automatic selection usually provides a reasonable performance, it still may be non-optimal for some cases, especially for very small networks. Also, using nstreams>1 is inherently throughput-oriented option, while for the best-latency estimations the number of streams should be set to 1.
-* `SKIP_OV_DYNAMIC_BATCHSIZE `: The topology of some models do not support openVINO dynamic batch sizes. Set the value of this parameter to `YES`, in order
+* `SKIP_OV_DYNAMIC_BATCHSIZE`: The topology of some models do not support openVINO dynamic batch sizes. Set the value of this parameter to `YES`, in order
 to skip the dynamic batch sizes in backend.
-* `ENABLE_BATCH_PADDING `: By default an error will be generated if backend receives a request with batch size less than max_batch_size specified in the configuration. This error can be avoided at a cost of performance by specifying `ENABLE_BATCH_PADDING` parameter as `YES`.
-* `RESHAPE_IO_LAYERS `: By setting this parameter as `YES`, the IO layers are reshaped to the dimensions provided in
+* `ENABLE_BATCH_PADDING`: By default an error will be generated if backend receives a request with batch size less than max_batch_size specified in the configuration. This error can be avoided at a cost of performance by specifying `ENABLE_BATCH_PADDING` parameter as `YES`.
+* `RESHAPE_IO_LAYERS`: By setting this parameter as `YES`, the IO layers are reshaped to the dimensions provided in
 model configuration. By default, the dimensions in the model is used.
 
 The section of model config file specifying these parameters will look like:
