@@ -1,4 +1,4 @@
-// Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
+// Copyright 2021-2022, NVIDIA CORPORATION. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -26,11 +26,12 @@
 
 #pragma once
 
-#include <inference_engine.hpp>
+#include <openvino/openvino.hpp>
 #include <set>
 #include <string>
 #include <unordered_map>
 #include <vector>
+
 #include "triton/backend/backend_common.h"
 #include "triton/core/tritonserver.h"
 
@@ -77,21 +78,15 @@ namespace triton { namespace backend { namespace openvino {
   } while (false)
 
 std::string ConvertVersionMapToString(
-    const std::map<std::string, InferenceEngine::Version>& version_map);
-std::string OpenVINOPrecisionToString(
-    InferenceEngine::Precision openvino_precision);
+    const std::map<std::string, ov::Version>& version_map);
 
-TRITONSERVER_DataType ConvertFromOpenVINOPrecision(
-    InferenceEngine::Precision openvino_precision);
-InferenceEngine::Precision ConvertToOpenVINOPrecision(
-    TRITONSERVER_DataType data_type);
-InferenceEngine::Precision ConvertToOpenVINOPrecision(
-    const std::string& data_type_str);
+TRITONSERVER_DataType ConvertFromOpenVINOElement(
+    ov::element::Type openvino_element);
+ov::element::Type ConvertToOpenVINOElement(TRITONSERVER_DataType data_type);
+ov::element::Type ConvertToOpenVINOElement(const std::string& data_type_str);
 
-InferenceEngine::Precision ModelConfigDataTypeToOpenVINOPrecision(
+ov::element::Type ModelConfigDataTypeToOpenVINOElement(
     const std::string& data_type_str);
-std::string OpenVINOPrecisionToModelConfigDataType(
-    InferenceEngine::Precision data_type);
 
 TRITONSERVER_Error* CompareDimsSupported(
     const std::string& model_name, const std::string& tensor_name,
@@ -102,19 +97,6 @@ TRITONSERVER_Error* ReadParameter(
     triton::common::TritonJson::Value& params, const std::string& key,
     std::string* param);
 
-void SetBatchSize(
-    const size_t batch_size, InferenceEngine::CNNNetwork* network);
-bool AdjustShapesBatch(
-    InferenceEngine::ICNNNetwork::InputShapes& shapes, const size_t batch_size,
-    const InferenceEngine::InputsDataMap& input_info);
-
 std::vector<int64_t> ConvertToSignedShape(const std::vector<size_t> shape);
-
-InferenceEngine::Blob::Ptr GetInputBlob(
-    const InferenceEngine::TensorDesc& tensor_desc);
-
-InferenceEngine::Blob::Ptr WrapInputBufferToBlob(
-    const InferenceEngine::TensorDesc& tensor_desc, const void* input_buffer,
-    size_t input_buffer_size = 0);
 
 }}}  // namespace triton::backend::openvino

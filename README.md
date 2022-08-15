@@ -78,10 +78,10 @@ but the listed CMake argument can be used to override.
 Configuration of OpenVINO for a model is done through the Parameters section of the model's 'config.pbtxt' file. The parameters and their description are as follows.
 
 * `CPU_EXTENSION_PATH`: Required for CPU custom layers. Absolute path to a shared library with the kernels implementations.
-* `CPU_THREADS_NUM`: Number of threads to use for inference on the CPU. Should be a non-negative number.
-* `ENFORCE_BF16`: Enforcing of floating point operations execution in bfloat16 precision on platforms with native bfloat16 support. Possible values are `YES` or `NO`.
-* `CPU_BIND_THREAD`: Enable threads->cores (`YES`, default), threads->(NUMA)nodes (`NUMA`) or completely disable (`NO`) CPU threads pinning for CPU-involved inference.
-* `CPU_THROUGHPUT_STREAMS`: Number of streams to use for inference on the CPU. Default value is determined automatically for a device. Please note that although the automatic selection usually provides a reasonable performance, it still may be non-optimal for some cases, especially for very small networks. Also, using nstreams>1 is inherently throughput-oriented option, while for the best-latency estimations the number of streams should be set to 1.
+* `INFERENCE_NUM_THREADS`: Number of threads to use for inference on the CPU. Should be a non-negative number.
+* `COMPILATION_NUM_THREADS`: Number of threads to use for model compilation. Should be a non-negative number.
+* `HINT_BF16`: Hint of floating point operations execution in bfloat16 precision on platforms with native bfloat16 support. Possible value is `YES`.
+* `NUM_STREAMS`: Enable threads->cores (`YES`, default) or threads->(NUMA)nodes (`NUMA`) CPU threads pinning for CPU-involved inference.
 * `SKIP_OV_DYNAMIC_BATCHSIZE`: The topology of some models do not support openVINO dynamic batch sizes. Set the value of this parameter to `YES`, in order
 to skip the dynamic batch sizes in backend.
 * `ENABLE_BATCH_PADDING`: By default an error will be generated if backend receives a request with batch size less than max_batch_size specified in the configuration. This error can be avoided at a cost of performance by specifying `ENABLE_BATCH_PADDING` parameter as `YES`.
@@ -95,13 +95,13 @@ The section of model config file specifying these parameters will look like:
 .
 .
 parameters: {
-key: "CPU_THROUGHPUT_STREAMS"
+key: "NUM_STREAMS"
 value: {
-string_value:"auto"
+string_value:"NUMA"
 }
 }
 parameters: {
-key: "CPU_THREADS_NUM"
+key: "INFERENCE_NUM_THREADS"
 value: {
 string_value:"5"
 }
