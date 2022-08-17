@@ -1081,11 +1081,10 @@ ModelInstanceState::SetInputTensors(
                 .c_str()));
       }
 
-      // Set the input blob to the buffer without allocating any new memory
-      ov::Tensor expected_tensor =
-          infer_request_.get_tensor(std::string(input_name));
+      // Set the input tensor to the buffer without allocating any new memory
       ov::Tensor input_tensor(
-          expected_tensor.get_element_type(), expected_tensor.get_shape(),
+          ConvertToOpenVINOElement(input_datatype),
+          std::vector<size_t>(batchn_shape.begin(), batchn_shape.end()),
           input_buffer);
       RETURN_IF_OPENVINO_ERROR(
           infer_request_.set_tensor(std::string(input_name), input_tensor),

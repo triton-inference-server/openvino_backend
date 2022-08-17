@@ -79,7 +79,7 @@ Configuration of OpenVINO for a model is done through the Parameters section of 
 
 * `CPU_EXTENSION_PATH`: Required for CPU custom layers. Absolute path to a shared library with the kernels implementations.
 * `INFERENCE_NUM_THREADS`: Number of threads to use for inference on the CPU. Should be a non-negative number.
-* `COMPILATION_NUM_THREADS`: Number of threads to use for model compilation. Should be a non-negative number.
+* `COMPILATION_NUM_THREADS`: Number of threads to use for model loading/compilation. Should be a non-negative number.
 * `HINT_BF16`: Hint of floating point operations execution in bfloat16 precision on platforms with native bfloat16 support. Possible value is `YES`.
 * `NUM_STREAMS`: Enable threads->cores (`YES`, default) or threads->(NUMA)nodes (`NUMA`) CPU threads pinning for CPU-involved inference.
 * `SKIP_OV_DYNAMIC_BATCHSIZE`: The topology of some models do not support openVINO dynamic batch sizes. Set the value of this parameter to `YES`, in order
