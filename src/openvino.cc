@@ -25,9 +25,11 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <stdint.h>
-#include <inference_engine.hpp>
+
 #include <mutex>
+#include <openvino/openvino.hpp>
 #include <vector>
+
 #include "openvino_utils.h"
 #include "triton/backend/backend_input_collector.h"
 #include "triton/backend/backend_memory.h"
@@ -75,42 +77,39 @@ class ModelState : public BackendModel {
       bool* setting);
   TRITONSERVER_Error* ParseParameter(
       const std::string& mkey, triton::common::TritonJson::Value& params,
-      std::map<std::string, std::string>* device_config);
+      std::vector<std::pair<std::string, ov::Any>>* device_config);
   TRITONSERVER_Error* ParseParameterHelper(
-      const std::string& mkey, std::string* ov_key, std::string* value);
+      const std::string& mkey, std::string* value,
+      std::pair<std::string, ov::Any>* ov_property);
 
-  TRITONSERVER_Error* ConfigureInferenceEngine();
+  TRITONSERVER_Error* ConfigureOpenvinoCore();
 
   // Reads the Intermediate Representation(IR) model using `artifact_name`
   // as the name for the model file/directory. Return in `model_path` the
   // full path to the model file, return `network` the CNNNetwork.
-  TRITONSERVER_Error* ReadNetwork(
+  TRITONSERVER_Error* ReadModel(
       const std::string& artifact_name, std::string* model_path);
 
-  TRITONSERVER_Error* ValidateConfigureNetwork();
+  TRITONSERVER_Error* ValidateConfigureModel();
   TRITONSERVER_Error* ValidateInputs(const size_t expected_input_cnt);
   TRITONSERVER_Error* ValidateOutputs();
 
   // Loads the configured model on the target device (currently only CPU) is
   // supported.
-  TRITONSERVER_Error* LoadNetwork(
+  TRITONSERVER_Error* LoadModel(
       const std::string& device,
-      const std::map<std::string, std::string> network_config);
+      const std::pair<std::string, ov::Any>& property);
 
   // Creates an infer request object on the specified device.
   TRITONSERVER_Error* CreateInferRequest(
-      const std::string& device, InferenceEngine::InferRequest* infer_request);
+      const std::string& device, ov::InferRequest* infer_request);
 
-  TRITONSERVER_Error* GetInputsInfo(
-      InferenceEngine::InputsDataMap* input_tensor_infos);
-
-  // Whether or not the network is read successfully
-  bool NetworkNotRead();
-  // Whether or not a executable network is loaded on
+  // Whether or not the model is read successfully
+  bool ModelNotRead();
+  // Whether or not a executable model is loaded on
   // the specified device.
-  bool NetworkNotLoaded(const std::string device_);
+  bool ModelNotLoaded(const std::string device);
 
-  InferenceEngine::CNNNetwork* Network() { return &network_; }
   bool SkipDynamicBatchSize() { return skip_dynamic_batchsize_; }
   bool EnableBatchPadding() { return enable_padding_; }
 
@@ -119,12 +118,12 @@ class ModelState : public BackendModel {
   TRITONSERVER_Error* AutoCompleteConfig();
 
   // Shared resources among the multiple instances.
-  InferenceEngine::Core inference_engine_;
-  InferenceEngine::CNNNetwork network_;
-  std::map<std::string, InferenceEngine::ExecutableNetwork> executable_network_;
+  ov::Core ov_core_;
+  std::shared_ptr<ov::Model> ov_model_;
+  std::map<std::string, ov::CompiledModel> compiled_model_;
   // Maps device to their respective parameters
-  std::map<std::string, std::map<std::string, std::string>> config_;
-  bool network_read_;
+  std::map<std::string, std::vector<std::pair<std::string, ov::Any>>> config_;
+  bool model_read_;
   bool skip_dynamic_batchsize_;
   bool enable_padding_;
   bool reshape_io_layers_;
@@ -142,12 +141,10 @@ ModelState::Create(TRITONBACKEND_Model* triton_model, ModelState** state)
         std::string("unexpected nullptr in BackendModelException"));
     RETURN_IF_ERROR(ex.err_);
   }
-  catch (const InferenceEngine::Exception& e) {
+  catch (const ov::Exception& e) {
     return TRITONSERVER_ErrorNew(
         TRITONSERVER_ERROR_INTERNAL,
-        (std::string("ModelState::Create InferenceEngine::Exception: ") +
-         e.what())
-            .c_str());
+        (std::string("ModelState::Create ov::Exception: ") + e.what()).c_str());
   }
   catch (...) {
     return TRITONSERVER_ErrorNew(
@@ -167,7 +164,7 @@ ModelState::Create(TRITONBACKEND_Model* triton_model, ModelState** state)
 }
 
 ModelState::ModelState(TRITONBACKEND_Model* triton_model)
-    : BackendModel(triton_model), network_read_(false),
+    : BackendModel(triton_model), model_read_(false),
       skip_dynamic_batchsize_(false), enable_padding_(false),
       reshape_io_layers_(false)
 {
@@ -187,11 +184,10 @@ ModelState::PrintModelConfig()
 }
 
 TRITONSERVER_Error*
-ModelState::ReadNetwork(
-    const std::string& artifact_name, std::string* model_path)
+ModelState::ReadModel(const std::string& artifact_name, std::string* model_path)
 {
   RETURN_ERROR_IF_FALSE(
-      NetworkNotRead(), TRITONSERVER_ERROR_INTERNAL,
+      ModelNotRead(), TRITONSERVER_ERROR_INTERNAL,
       std::string("attempt to read model at '") + *model_path +
           "' more than once");
 
@@ -216,9 +212,9 @@ ModelState::ReadNetwork(
   }
 
   RETURN_IF_OPENVINO_ASSIGN_ERROR(
-      network_, inference_engine_.ReadNetwork(*model_path), "reading network");
+      ov_model_, ov_core_.read_model(*model_path), "reading model");
 
-  network_read_ = true;
+  model_read_ = true;
   return nullptr;  // success
 }
 
@@ -251,12 +247,11 @@ ModelState::ParseParameters(const std::string& device)
       config_[device] = {};
       auto& device_config = config_.at(device);
       RETURN_IF_ERROR(
-          ParseParameter("CPU_THREADS_NUM", params, &device_config));
-      RETURN_IF_ERROR(ParseParameter("ENFORCE_BF16", params, &device_config));
+          ParseParameter("INFERENCE_NUM_THREADS", params, &device_config));
       RETURN_IF_ERROR(
-          ParseParameter("CPU_BIND_THREAD", params, &device_config));
-      RETURN_IF_ERROR(
-          ParseParameter("CPU_THROUGHPUT_STREAMS", params, &device_config));
+          ParseParameter("COMPILATION_NUM_THREADS", params, &device_config));
+      RETURN_IF_ERROR(ParseParameter("HINT_BF16", params, &device_config));
+      RETURN_IF_ERROR(ParseParameter("NUM_STREAMS", params, &device_config));
     }
   }
 
@@ -273,11 +268,8 @@ ModelState::LoadCpuExtensions(triton::common::TritonJson::Value& params)
   if (!cpu_ext_path.empty()) {
     // CPU (MKLDNN) extensions is loaded as a shared library and passed as a
     // pointer to base extension
-    const auto extension_ptr =
-        std::make_shared<InferenceEngine::Extension>(cpu_ext_path);
     RETURN_IF_OPENVINO_ERROR(
-        inference_engine_.AddExtension(extension_ptr),
-        " loading custom CPU extensions");
+        ov_core_.add_extension(cpu_ext_path), " loading custom CPU extensions");
     LOG_MESSAGE(
         TRITONSERVER_LOG_INFO,
         (std::string("CPU (MKLDNN) extensions is loaded") + cpu_ext_path)
@@ -309,28 +301,28 @@ ModelState::ParseBoolParameter(
 TRITONSERVER_Error*
 ModelState::ParseParameter(
     const std::string& mkey, triton::common::TritonJson::Value& params,
-    std::map<std::string, std::string>* device_config)
+    std::vector<std::pair<std::string, ov::Any>>* device_config)
 {
   std::string value;
   LOG_IF_ERROR(
       ReadParameter(params, mkey, &(value)), "error when reading parameters");
-
   if (!value.empty()) {
-    std::string ov_key;
-    RETURN_IF_ERROR(ParseParameterHelper(mkey, &ov_key, &value));
-    (*device_config)[ov_key] = value;
+    std::pair<std::string, ov::Any> ov_property;
+    RETURN_IF_ERROR(ParseParameterHelper(mkey, &value, &ov_property));
+    device_config->push_back(ov_property);
   }
   return nullptr;
 }
 
 TRITONSERVER_Error*
 ModelState::ParseParameterHelper(
-    const std::string& mkey, std::string* ov_key, std::string* value)
+    const std::string& mkey, std::string* value,
+    std::pair<std::string, ov::Any>* ov_property)
 {
   std::transform(
       value->begin(), value->end(), value->begin(),
       [](unsigned char c) { return std::tolower(c); });
-  if (mkey.compare("CPU_THREADS_NUM") == 0) {
+  if (mkey.compare("INFERENCE_NUM_THREADS") == 0) {
     if (!IsNumber(*value)) {
       return TRITONSERVER_ErrorNew(
           TRITONSERVER_ERROR_INVALID_ARG,
@@ -338,48 +330,38 @@ ModelState::ParseParameterHelper(
            "' to be a non-negative number, got " + *value)
               .c_str());
     }
-    *ov_key = CONFIG_KEY(CPU_THREADS_NUM);
-  } else if (mkey.compare("ENFORCE_BF16") == 0) {
+    *ov_property = ov::inference_num_threads(std::stoi(*value));
+  } else if (mkey.compare("COMPILATION_NUM_THREADS") == 0) {
+    if (!IsNumber(*value)) {
+      return TRITONSERVER_ErrorNew(
+          TRITONSERVER_ERROR_INVALID_ARG,
+          (std::string("expected the parameter '") + mkey +
+           "' to be a non-negative number, got " + *value)
+              .c_str());
+    }
+    *ov_property = ov::compilation_num_threads(std::stoi(*value));
+  } else if (mkey.compare("HINT_BF16") == 0) {
     if (value->compare("yes") == 0) {
-      *value = CONFIG_VALUE(YES);
-    } else if (value->compare("no") == 0) {
-      *value = CONFIG_VALUE(NO);
+      *ov_property = ov::hint::inference_precision(ov::element::bf16);
     } else {
       return TRITONSERVER_ErrorNew(
           TRITONSERVER_ERROR_INVALID_ARG,
           (std::string("expected the parameter '") + mkey +
-           "' to be either YES or NO, got " + *value)
+           "' to be YES, got " + *value)
               .c_str());
     }
-    *ov_key = CONFIG_KEY(ENFORCE_BF16);
-  } else if (mkey.compare("CPU_BIND_THREAD") == 0) {
-    if (value->compare("yes") == 0) {
-      *value = CONFIG_VALUE(YES);
-    } else if (value->compare("numa") == 0) {
-      *value = CONFIG_VALUE(NUMA);
-    } else if (value->compare("no") == 0) {
-      *value = CONFIG_VALUE(NO);
-    } else {
-      return TRITONSERVER_ErrorNew(
-          TRITONSERVER_ERROR_INVALID_ARG,
-          (std::string("expected the parameter '") + mkey +
-           "' to be either YES/NUMA/NO, got " + *value)
-              .c_str());
-    }
-    *ov_key = CONFIG_KEY(CPU_BIND_THREAD);
-  } else if (mkey.compare("CPU_THROUGHPUT_STREAMS") == 0) {
+  } else if (mkey.compare("NUM_STREAMS") == 0) {
     if (value->compare("auto") == 0) {
-      *value = "CPU_THROUGHPUT_AUTO";
+      *ov_property = ov::streams::num(ov::streams::AUTO);
     } else if (value->compare("numa") == 0) {
-      *value = "CPU_THROUGHPUT_NUMA";
-    } else if (!IsNumber(*value)) {
+      *ov_property = ov::streams::num(ov::streams::NUMA);
+    } else {
       return TRITONSERVER_ErrorNew(
           TRITONSERVER_ERROR_INVALID_ARG,
           (std::string("expected the parameter '") + mkey +
-           "' to be a non-negative number or AUTO/NUMA, got " + *value)
+           "' to be either AUTO/NUMA, got " + *value)
               .c_str());
     }
-    *ov_key = CONFIG_KEY(CPU_THROUGHPUT_STREAMS);
   } else {
     return TRITONSERVER_ErrorNew(
         TRITONSERVER_ERROR_INVALID_ARG,
@@ -392,72 +374,75 @@ ModelState::ParseParameterHelper(
 }
 
 TRITONSERVER_Error*
-ModelState::ConfigureInferenceEngine()
+ModelState::ConfigureOpenvinoCore()
 {
   for (auto&& item : config_) {
-    RETURN_IF_OPENVINO_ERROR(
-        inference_engine_.SetConfig(item.second, item.first),
-        "configuring inference engine");
+    std::string device_name = item.first;
+    std::vector<std::pair<std::string, ov::Any>> properties = item.second;
+    for (auto& property : properties) {
+      RETURN_IF_OPENVINO_ERROR(
+          ov_core_.set_property(device_name, property),
+          "configuring openvino core");
+    }
   }
 
   return nullptr;
 }
 
 TRITONSERVER_Error*
-ModelState::LoadNetwork(
-    const std::string& device,
-    const std::map<std::string, std::string> network_config)
+ModelState::LoadModel(
+    const std::string& device, const std::pair<std::string, ov::Any>& property)
 {
   RETURN_ERROR_IF_FALSE(
-      NetworkNotLoaded(device), TRITONSERVER_ERROR_INTERNAL,
+      ModelNotLoaded(device), TRITONSERVER_ERROR_INTERNAL,
       std::string("attempt to load model '") + Name() + "' on device '" +
           device + "' more than once");
 
   LOG_MESSAGE(
-      TRITONSERVER_LOG_VERBOSE,
-      (std::string("InferenceEngine: ") +
-       InferenceEngine::GetInferenceEngineVersion()->description)
-          .c_str());
+      TRITONSERVER_LOG_VERBOSE, (std::string("Openvino runtime: ") +
+                                 std::to_string(OPENVINO_VERSION_MAJOR) + "." +
+                                 std::to_string(OPENVINO_VERSION_MINOR) + "." +
+                                 std::to_string(OPENVINO_VERSION_PATCH))
+                                    .c_str());
   LOG_MESSAGE(
       TRITONSERVER_LOG_VERBOSE,
       (std::string("Device info: \n") +
-       ConvertVersionMapToString(inference_engine_.GetVersions(device)))
+       ConvertVersionMapToString(ov_core_.get_versions(device)))
           .c_str());
 
   RETURN_IF_OPENVINO_ASSIGN_ERROR(
-      executable_network_[device],
-      inference_engine_.LoadNetwork(network_, device, network_config),
-      "loading network");
+      compiled_model_[device],
+      ov_core_.compile_model(ov_model_, device, property), "loading model");
 
   return nullptr;  // success
 }
 
 TRITONSERVER_Error*
 ModelState::CreateInferRequest(
-    const std::string& device, InferenceEngine::InferRequest* infer_request)
+    const std::string& device, ov::InferRequest* infer_request)
 {
   RETURN_IF_OPENVINO_ASSIGN_ERROR(
-      *infer_request, executable_network_[device].CreateInferRequest(),
+      *infer_request, compiled_model_[device].create_infer_request(),
       "creating infer request object");
 
   return nullptr;
 }
 
 bool
-ModelState::NetworkNotRead()
+ModelState::ModelNotRead()
 {
-  return !network_read_;
+  return !model_read_;
 }
 
 bool
-ModelState::NetworkNotLoaded(const std::string device)
+ModelState::ModelNotLoaded(const std::string device)
 {
-  auto itr = executable_network_.find(device);
-  return (itr == executable_network_.end());
+  auto itr = compiled_model_.find(device);
+  return (itr == compiled_model_.end());
 }
 
 TRITONSERVER_Error*
-ModelState::ValidateConfigureNetwork()
+ModelState::ValidateConfigureModel()
 {
   size_t expected_input_cnt = 0;
   {
@@ -476,28 +461,27 @@ ModelState::ValidateConfigureNetwork()
 TRITONSERVER_Error*
 ModelState::ValidateInputs(const size_t expected_input_cnt)
 {
-  InferenceEngine::InputsDataMap input_tensor_infos;
-  RETURN_IF_ERROR(GetInputsInfo(&input_tensor_infos));
-  if (input_tensor_infos.size() != expected_input_cnt) {
+  std::vector<ov::Output<ov::Node>> model_inputs;
+  RETURN_IF_OPENVINO_ASSIGN_ERROR(
+      model_inputs, ov_model_->inputs(), "getting input infos");
+
+  if (model_inputs.size() != expected_input_cnt) {
     return TRITONSERVER_ErrorNew(
         TRITONSERVER_ERROR_INVALID_ARG,
         (std::string("unable to load model '") + Name() +
          "', configuration expects " + std::to_string(expected_input_cnt) +
-         " inputs, model provides " + std::to_string(input_tensor_infos.size()))
+         " inputs, model provides " + std::to_string(model_inputs.size()))
             .c_str());
   }
 
-  std::set<std::string> input_tensor_names;
-  for (const auto& input_tensor_info : input_tensor_infos) {
-    input_tensor_names.insert(input_tensor_info.first);
+  std::set<std::string> model_inputs_names;
+  std::map<std::string, size_t> model_inputs_name_to_index;
+  for (size_t i = 0; i < model_inputs.size(); i++) {
+    model_inputs_names.insert(model_inputs[i].get_any_name());
+    model_inputs_name_to_index[model_inputs[i].get_any_name()] = i;
   }
 
-  InferenceEngine::ICNNNetwork::InputShapes model_shapes;
-  if (reshape_io_layers_) {
-    RETURN_IF_OPENVINO_ASSIGN_ERROR(
-        model_shapes, network_.getInputShapes(),
-        "retrieving original shapes from the network");
-  }
+  ov::preprocess::PrePostProcessor ppp(ov_model_);
 
   triton::common::TritonJson::Value ios;
   RETURN_IF_ERROR(model_config_.MemberAsArray("input", &ios));
@@ -509,13 +493,12 @@ ModelState::ValidateInputs(const size_t expected_input_cnt)
     std::string io_dtype;
     RETURN_IF_ERROR(io.MemberAsString("data_type", &io_dtype));
 
-    auto iit = input_tensor_infos.find(io_name);
-    if (iit == input_tensor_infos.end()) {
-      RETURN_IF_ERROR(CheckAllowedModelInput(io, input_tensor_names));
+    if (model_inputs_names.find(io_name) == model_inputs_names.end()) {
+      RETURN_IF_ERROR(CheckAllowedModelInput(io, model_inputs_names));
     }
 
-    auto openvino_precision = ModelConfigDataTypeToOpenVINOPrecision(io_dtype);
-    if (openvino_precision == InferenceEngine::Precision::UNSPECIFIED) {
+    auto openvino_element = ModelConfigDataTypeToOpenVINOElement(io_dtype);
+    if (openvino_element == ov::element::undefined) {
       return TRITONSERVER_ErrorNew(
           TRITONSERVER_ERROR_INTERNAL,
           (std::string("unsupported datatype ") + io_dtype + " for input '" +
@@ -523,7 +506,7 @@ ModelState::ValidateInputs(const size_t expected_input_cnt)
               .c_str());
     }
     RETURN_IF_OPENVINO_ERROR(
-        iit->second->setPrecision(openvino_precision),
+        ppp.input(io_name).tensor().set_element_type(openvino_element),
         std::string("setting precision for " + io_name).c_str());
 
     // If a reshape is provided for the input then use that when
@@ -536,39 +519,62 @@ ModelState::ValidateInputs(const size_t expected_input_cnt)
       RETURN_IF_ERROR(ParseShape(io, "dims", &dims));
     }
 
+    ov::Shape input_shape;
+    RETURN_IF_OPENVINO_ASSIGN_ERROR(
+        input_shape,
+        model_inputs[model_inputs_name_to_index[io_name]].get_shape(),
+        ("retrieving original shapes from input " + io_name).c_str());
+
     if (reshape_io_layers_) {
       int index = (MaxBatchSize() != 0) ? 1 : 0;
       for (const auto dim : dims) {
-        model_shapes[io_name][index++] = dim;
+        input_shape[index++] = dim;
       }
+      RETURN_IF_OPENVINO_ERROR(
+          ppp.input(io_name).tensor().set_shape(input_shape),
+          std::string("setting shape for " + io_name).c_str());
     } else {
       RETURN_IF_ERROR(CompareDimsSupported(
-          Name(), io_name, iit->second->getTensorDesc().getDims(), dims,
+          Name(), io_name,
+          std::vector<size_t>(input_shape.begin(), input_shape.end()), dims,
           MaxBatchSize(), false /* compare_exact */));
+    }
+
+    if (MaxBatchSize()) {
+      RETURN_IF_OPENVINO_ERROR(
+          ppp.input(io_name).tensor().set_layout("N..."),
+          std::string("setting layout for " + io_name).c_str());
     }
   }
 
-  if (reshape_io_layers_) {
-    network_.reshape(model_shapes);
+  // Model preprocessing
+  RETURN_IF_OPENVINO_ASSIGN_ERROR(
+      ov_model_, ppp.build(), "apply model input preprocessing");
+
+  // Configuring the model to handle the max_batch_size
+  if (MaxBatchSize()) {
+    RETURN_IF_OPENVINO_ERROR(
+        ov::set_batch(ov_model_, MaxBatchSize()), "setting max batch size");
   }
 
-  // Configuring the network to handle the max_batch_size
-  RETURN_IF_OPENVINO_ERROR(
-      SetBatchSize(MaxBatchSize(), &network_), "setting max batch size");
   return nullptr;  // success
 }
 
 TRITONSERVER_Error*
 ModelState::ValidateOutputs()
 {
-  InferenceEngine::OutputsDataMap output_tensor_infos;
+  std::vector<ov::Output<ov::Node>> model_outputs;
   RETURN_IF_OPENVINO_ASSIGN_ERROR(
-      output_tensor_infos, network_.getOutputsInfo(),
-      "getting output infos for validation");
-  std::set<std::string> output_tensor_names;
-  for (const auto& output_tensor_info : output_tensor_infos) {
-    output_tensor_names.insert(output_tensor_info.first);
+      model_outputs, ov_model_->outputs(), "getting output infos");
+
+  std::set<std::string> model_outputs_names;
+  std::map<std::string, size_t> model_outputs_name_to_index;
+  for (size_t i = 0; i < model_outputs.size(); i++) {
+    model_outputs_names.insert(model_outputs[i].get_any_name());
+    model_outputs_name_to_index[model_outputs[i].get_any_name()] = i;
   }
+
+  ov::preprocess::PrePostProcessor ppp(ov_model_);
 
   triton::common::TritonJson::Value ios;
   RETURN_IF_ERROR(model_config_.MemberAsArray("output", &ios));
@@ -580,24 +586,23 @@ ModelState::ValidateOutputs()
     std::string io_dtype;
     RETURN_IF_ERROR(io.MemberAsString("data_type", &io_dtype));
 
-    auto iit = output_tensor_infos.find(io_name);
-    if (iit == output_tensor_infos.end()) {
-      RETURN_IF_ERROR(CheckAllowedModelOutput(io, output_tensor_names));
+    if (model_outputs_names.find(io_name) == model_outputs_names.end()) {
+      RETURN_IF_ERROR(CheckAllowedModelOutput(io, model_outputs_names));
     }
 
-    auto openvino_precision = ModelConfigDataTypeToOpenVINOPrecision(io_dtype);
-    if (openvino_precision == InferenceEngine::Precision::UNSPECIFIED) {
+    auto openvino_element = ModelConfigDataTypeToOpenVINOElement(io_dtype);
+    if (openvino_element == ov::element::undefined) {
       return TRITONSERVER_ErrorNew(
           TRITONSERVER_ERROR_INTERNAL,
-          (std::string("unsupported datatype ") + io_dtype + " for input '" +
+          (std::string("unsupported datatype ") + io_dtype + " for output '" +
            io_name + "' for model '" + Name() + "'")
               .c_str());
     }
     RETURN_IF_OPENVINO_ERROR(
-        iit->second->setPrecision(openvino_precision),
+        ppp.output(io_name).tensor().set_element_type(openvino_element),
         std::string("setting precision for " + io_name).c_str());
 
-    // If a reshape is provided for the input then use that when
+    // If a reshape is provided for the output then use that when
     // validating that the model matches what is expected.
     std::vector<int64_t> dims;
     triton::common::TritonJson::Value reshape;
@@ -606,21 +611,22 @@ ModelState::ValidateOutputs()
     } else {
       RETURN_IF_ERROR(ParseShape(io, "dims", &dims));
     }
+    ov::Shape output_shape;
+    RETURN_IF_OPENVINO_ASSIGN_ERROR(
+        output_shape,
+        model_outputs[model_outputs_name_to_index[io_name]].get_shape(),
+        ("retrieving original shapes from output " + io_name).c_str());
     RETURN_IF_ERROR(CompareDimsSupported(
-        Name(), io_name, iit->second->getTensorDesc().getDims(), dims,
+        Name(), io_name,
+        std::vector<size_t>(output_shape.begin(), output_shape.end()), dims,
         MaxBatchSize(), true /* compare_exact */));
   }
 
-  return nullptr;  // success
-}
-
-TRITONSERVER_Error*
-ModelState::GetInputsInfo(InferenceEngine::InputsDataMap* input_tensor_infos)
-{
+  // Model preprocessing
   RETURN_IF_OPENVINO_ASSIGN_ERROR(
-      *input_tensor_infos, network_.getInputsInfo(), "getting input infos");
+      ov_model_, ppp.build(), "apply model output preprocessing");
 
-  return nullptr;
+  return nullptr;  // success
 }
 
 TRITONSERVER_Error*
@@ -648,7 +654,6 @@ class ModelInstanceState : public BackendModelInstance {
       ModelState* model_state,
       TRITONBACKEND_ModelInstance* triton_model_instance,
       ModelInstanceState** state);
-  virtual ~ModelInstanceState();
 
   // Get the state of the model that corresponds to this instance.
   ModelState* StateForModel() const { return model_state_; }
@@ -662,7 +667,6 @@ class ModelInstanceState : public BackendModelInstance {
       ModelState* model_state,
       TRITONBACKEND_ModelInstance* triton_model_instance);
 
-  TRITONSERVER_Error* SetBatch(const int batch_size);
   TRITONSERVER_Error* Infer(
       std::vector<TRITONBACKEND_Response*>* responses,
       const uint32_t response_count);
@@ -684,8 +688,7 @@ class ModelInstanceState : public BackendModelInstance {
   std::string model_path_;
 
   std::string device_;
-  InferenceEngine::InferRequest infer_request_;
-  std::map<std::string, InferenceEngine::Blob::Ptr> input_blobs_;
+  ov::InferRequest infer_request_;
 
   size_t batch_pad_size_;
 };
@@ -704,12 +707,10 @@ ModelInstanceState::Create(
         std::string("unexpected nullptr in BackendModelInstanceException"));
     RETURN_IF_ERROR(ex.err_);
   }
-  catch (const InferenceEngine::Exception& e) {
+  catch (const ov::Exception& e) {
     return TRITONSERVER_ErrorNew(
         TRITONSERVER_ERROR_INTERNAL,
-        (std::string(
-             "ModelInstanceState::Create InferenceEngine::Exception: ") +
-         e.what())
+        (std::string("ModelInstanceState::Create ov::Exception: ") + e.what())
             .c_str());
   }
   catch (...) {
@@ -733,37 +734,28 @@ ModelInstanceState::ModelInstanceState(
             .c_str()));
   }
 
-  if (model_state_->NetworkNotRead()) {
+  if (model_state_->ModelNotRead()) {
     THROW_IF_BACKEND_INSTANCE_ERROR(model_state_->ParseParameters());
     THROW_IF_BACKEND_INSTANCE_ERROR(
-        model_state_->ReadNetwork(ArtifactFilename(), &model_path_));
-    THROW_IF_BACKEND_INSTANCE_ERROR(model_state_->ValidateConfigureNetwork());
+        model_state_->ReadModel(ArtifactFilename(), &model_path_));
+    THROW_IF_BACKEND_INSTANCE_ERROR(model_state_->ValidateConfigureModel());
   }
 
-  if (model_state_->NetworkNotLoaded(device_)) {
+  if (model_state_->ModelNotLoaded(device_)) {
     THROW_IF_BACKEND_INSTANCE_ERROR(model_state_->ParseParameters(device_));
-    // enable dynamic batching in the network
-    std::map<std::string, std::string> network_config;
+    // enable dynamic batching in the model
+    std::pair<std::string, ov::Any> property =
+        ov::hint::allow_auto_batching(false);
     if ((model_state_->MaxBatchSize() != 0) &&
         (!model_state_->SkipDynamicBatchSize())) {
-      network_config
-          [InferenceEngine::PluginConfigParams::KEY_DYN_BATCH_ENABLED] =
-              InferenceEngine::PluginConfigParams::YES;
+      property = ov::hint::allow_auto_batching(true);
     }
-    THROW_IF_BACKEND_INSTANCE_ERROR(model_state_->ConfigureInferenceEngine());
-    THROW_IF_BACKEND_INSTANCE_ERROR(
-        model_state_->LoadNetwork(device_, network_config));
+    THROW_IF_BACKEND_INSTANCE_ERROR(model_state_->ConfigureOpenvinoCore());
+    THROW_IF_BACKEND_INSTANCE_ERROR(model_state_->LoadModel(device_, property));
   }
 
   THROW_IF_BACKEND_INSTANCE_ERROR(
       model_state_->CreateInferRequest(device_, &infer_request_));
-}
-
-ModelInstanceState::~ModelInstanceState()
-{
-  for (auto itr : input_blobs_) {
-    itr.second->deallocate();
-  }
 }
 
 void
@@ -895,17 +887,6 @@ ModelInstanceState::ProcessRequests(
     }
   }
 
-  if (!all_response_failed) {
-    if (!model_state_->SkipDynamicBatchSize()) {
-      // Sets the new batch size before issuing the inference.
-      if (max_batch_size != 0) {
-        RESPOND_ALL_AND_SET_TRUE_IF_ERROR(
-            responses, request_count, all_response_failed,
-            SetBatch(total_batch_size));
-      }
-    }
-  }
-
   std::vector<const char*> input_names;
   if (!all_response_failed) {
     RESPOND_ALL_AND_SET_TRUE_IF_ERROR(
@@ -970,7 +951,7 @@ ModelInstanceState::ProcessRequests(
   // Send all the responses that haven't already been sent because of
   // an earlier error. Note that the responses are not set to nullptr
   // here as we need that indication below to determine if the request
-  // we successful or not.
+  // was successful or not.
   for (auto& response : responses) {
     if (response != nullptr) {
       LOG_IF_ERROR(
@@ -1006,20 +987,11 @@ ModelInstanceState::ProcessRequests(
 }
 
 TRITONSERVER_Error*
-ModelInstanceState::SetBatch(const int batch_size)
-{
-  RETURN_IF_OPENVINO_ERROR(
-      infer_request_.SetBatch(batch_size), "setting batch size");
-
-  return nullptr;
-}
-
-TRITONSERVER_Error*
 ModelInstanceState::Infer(
     std::vector<TRITONBACKEND_Response*>* responses,
     const uint32_t response_count)
 {
-  RETURN_IF_OPENVINO_ERROR(infer_request_.Infer(), "running inference");
+  RETURN_IF_OPENVINO_ERROR(infer_request_.infer(), "running inference");
 
   return nullptr;
 }
@@ -1037,9 +1009,6 @@ ModelInstanceState::SetInputTensors(
   // request as the representative for the input tensors.
   uint32_t input_count;
   RETURN_IF_ERROR(TRITONBACKEND_RequestInputCount(requests[0], &input_count));
-
-  InferenceEngine::InputsDataMap input_tensor_infos;
-  RETURN_IF_ERROR(model_state_->GetInputsInfo(&input_tensor_infos));
 
   BackendInputCollector collector(
       requests, request_count, responses, model_state_->TritonMemoryManager(),
@@ -1070,13 +1039,9 @@ ModelInstanceState::SetInputTensors(
     const int64_t batchn_byte_size = GetByteSize(input_datatype, batchn_shape);
 
     if (batch_pad_size_ != 0) {
-      if (input_blobs_.find(input_name) == input_blobs_.end()) {
-        input_blobs_[input_name] =
-            GetInputBlob(input_tensor_infos[input_name]->getTensorDesc());
-        input_blobs_[input_name]->allocate();
-      }
-      auto data_blob = input_blobs_[input_name];
-      if ((size_t)batchn_byte_size != data_blob->byteSize()) {
+      ov::Tensor input_tensor =
+          infer_request_.get_tensor(std::string(input_name));
+      if ((size_t)batchn_byte_size != input_tensor.get_byte_size()) {
         LOG_MESSAGE(
             TRITONSERVER_LOG_VERBOSE,
             (std::string("padding input with ") +
@@ -1085,22 +1050,21 @@ ModelInstanceState::SetInputTensors(
              "batch_size equal to max_batch_size for better performance.")
                 .c_str());
       }
-      auto dest = (data_blob->buffer()).as<char*>();
-      memset(dest, 0, data_blob->byteSize());
+      char* dest = (char*)input_tensor.data(ov::element::undefined);
+      memset(dest, 0, input_tensor.get_byte_size());
       collector.ProcessTensor(
-          input_name, dest, data_blob->byteSize(), TRITONSERVER_MEMORY_CPU, 0);
-      RETURN_IF_OPENVINO_ERROR(
-          infer_request_.SetBlob(input_name, data_blob),
-          "setting the input tensor data");
+          input_name, dest, input_tensor.get_byte_size(),
+          TRITONSERVER_MEMORY_CPU, 0);
     } else {
-      const char* input_buffer;
+      char* input_buffer;
       size_t buffer_byte_size;
       TRITONSERVER_MemoryType memory_type;
       int64_t memory_type_id;
       RETURN_IF_ERROR(collector.ProcessTensor(
           input_name, nullptr, 0,
           {{TRITONSERVER_MEMORY_CPU_PINNED, 0}, {TRITONSERVER_MEMORY_CPU, 0}},
-          &input_buffer, &buffer_byte_size, &memory_type, &memory_type_id));
+          (const char**)&input_buffer, &buffer_byte_size, &memory_type,
+          &memory_type_id));
       if (memory_type == TRITONSERVER_MEMORY_GPU) {
         RETURN_IF_ERROR(TRITONSERVER_ErrorNew(
             TRITONSERVER_ERROR_UNSUPPORTED,
@@ -1117,13 +1081,14 @@ ModelInstanceState::SetInputTensors(
                 .c_str()));
       }
 
-      // Set the input blob to the buffer without allocating any new memory
-      auto data_blob = WrapInputBufferToBlob(
-          input_tensor_infos[input_name]->getTensorDesc(), input_buffer,
-          batchn_byte_size);
+      // Set the input tensor to the buffer without allocating any new memory
+      ov::Tensor input_tensor(
+          ConvertToOpenVINOElement(input_datatype),
+          std::vector<size_t>(batchn_shape.begin(), batchn_shape.end()),
+          input_buffer);
       RETURN_IF_OPENVINO_ERROR(
-          infer_request_.SetBlob(input_name, data_blob),
-          "setting the input tensor data");
+          infer_request_.set_tensor(std::string(input_name), input_tensor),
+          "setting tensor data");
     }
   }
 
@@ -1145,21 +1110,16 @@ ModelInstanceState::ReadOutputTensors(
   for (size_t idx = 0; idx < output_names.size(); idx++) {
     std::string name = output_names[idx];
 
-    InferenceEngine::Blob::Ptr output_blob;
-    RETURN_IF_OPENVINO_ASSIGN_ERROR(
-        output_blob, infer_request_.GetBlob(name),
-        "reading output tensor blob ");
-    auto output_shape =
-        ConvertToSignedShape(output_blob->getTensorDesc().getDims());
+    ov::Tensor output_tensor = infer_request_.get_tensor(name);
+    std::vector<int64_t> output_shape =
+        ConvertToSignedShape(output_tensor.get_shape());
 
     RETURN_IF_ERROR(ValidateOutputBatchSize(&output_shape));
 
-    auto const mem_locker = output_blob->cbuffer();
     responder.ProcessTensor(
-        name,
-        ConvertFromOpenVINOPrecision(
-            output_blob->getTensorDesc().getPrecision()),
-        output_shape, mem_locker.as<const char*>(), TRITONSERVER_MEMORY_CPU, 0);
+        name, ConvertFromOpenVINOElement(output_tensor.get_element_type()),
+        output_shape, (const char*)output_tensor.data(ov::element::undefined),
+        TRITONSERVER_MEMORY_CPU, 0);
   }
 
   // Finalize and wait for any pending buffer copies.

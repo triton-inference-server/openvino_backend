@@ -45,9 +45,6 @@ option(TRITON_ENABLE_STATS "Include statistics collections in backend" ON)
 set(TRITON_BUILD_CONTAINER "" CACHE STRING "Triton container to use a base for build")
 set(TRITON_BUILD_CONTAINER_VERSION "" CACHE STRING "Triton container version to target")
 set(TRITON_BUILD_OPENVINO_VERSION "" CACHE STRING "OpenVINO version to build")
-set(TRITON_BUILD_OPENVINO_COMMIT_SHA "" CACHE STRING "OpenVINO commit version to build")
-set(TRITON_OPENVINO_BACKEND_INSTALLDIR "" CACHE STRING "The directory name to install openVINO backend")
-set(TRITON_BUILD_USE_PREBUILT_OPENVINO OFF CACHE BOOL "Uses prebuilt OpenVINO libraries from Intel")
 
 set(TRITON_BACKEND_REPO_TAG "main" CACHE STRING "Tag for triton-inference-server/backend repo")
 set(TRITON_CORE_REPO_TAG "main" CACHE STRING "Tag for triton-inference-server/core repo")
@@ -59,46 +56,12 @@ if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE Release)
 endif()
 
-if(NOT TRITON_BUILD_OPENVINO_VERSION AND NOT TRITON_BUILD_OPENVINO_COMMIT_SHA)
-  message(FATAL_ERROR "TRITON_BUILD_OPENVINO_VERSION or TRITON_BUILD_OPENVINO_COMMIT_SHA are required")
-endif()
-
-if(TRITON_BUILD_OPENVINO_COMMIT_SHA AND TRITON_BUILD_USE_PREBUILT_OPENVINO)
-  message(FATAL_ERROR "TRITON_BUILD_USE_PREBUILT_OPENVINO can not be specified alongwith TRITON_BUILD_OPENVINO_COMMIT_SHA")
-endif()
-
-if(TRITON_BUILD_OPENVINO_COMMIT_SHA)
-  set(TRITON_OPENVINO_BACKEND_LIBNAME triton_openvino_${TRITON_BUILD_OPENVINO_COMMIT_SHA})
-  if(NOT TRITON_OPENVINO_BACKEND_INSTALLDIR) 
-    set(TRITON_OPENVINO_BACKEND_INSTALLDIR openvino_${TRITON_BUILD_OPENVINO_COMMIT_SHA})
-    message(STATUS " Set ${TRITON_OPENVINO_BACKEND_INSTALLDIR}")
-  endif()
-endif()
-
-if(TRITON_BUILD_OPENVINO_VERSION MATCHES "^([0-9]+)[\.]([0-9]+)[\.0-9]*$")
-  if(TRITON_BUILD_USE_PREBUILT_OPENVINO)
-    set(TRITON_OPENVINO_BACKEND_LIBNAME triton_openvino_${CMAKE_MATCH_1}_${CMAKE_MATCH_2}_pre)
-    if(NOT TRITON_OPENVINO_BACKEND_INSTALLDIR) 
-      set(TRITON_OPENVINO_BACKEND_INSTALLDIR openvino_${CMAKE_MATCH_1}_${CMAKE_MATCH_2}_pre)
-    endif()
-  else()
-    set(TRITON_OPENVINO_BACKEND_LIBNAME triton_openvino_${CMAKE_MATCH_1}_${CMAKE_MATCH_2})
-    if(NOT TRITON_OPENVINO_BACKEND_INSTALLDIR) 
-      set(TRITON_OPENVINO_BACKEND_INSTALLDIR openvino_${CMAKE_MATCH_1}_${CMAKE_MATCH_2})
-    endif()
-  endif()
-else()
-  if(TRITON_BUILD_OPENVINO_VERSION)
-    message(FATAL_ERROR "TRITON_BUILD_OPENVINO_VERSION should be in the format <major>.<minor>[.<build_num>]")
-  endif()
+if(NOT TRITON_BUILD_OPENVINO_VERSION)
+  message(FATAL_ERROR "TRITON_BUILD_OPENVINO_VERSION is required")
 endif()
 
 if(WIN32 AND NOT TRITON_BUILD_CONTAINER)
   message(FATAL_ERROR "TRITON_BUILD_CONTAINER is required")
-endif()
-
-if(WIN32 AND TRITON_BUILD_USE_PREBUILT_OPENVINO)
-  message(FATAL_ERROR "TRITON_BUILD_USE_PREBUILT_OPENVINO not supported on WIN32")
 endif()
 
 if(NOT TRITON_BUILD_CONTAINER AND NOT TRITON_BUILD_CONTAINER_VERSION)
@@ -114,19 +77,10 @@ set(TRITON_OPENVINO_INCLUDE_PATHS "${CMAKE_CURRENT_BINARY_DIR}/openvino/include"
 set(TRITON_OPENVINO_LIB_PATHS "${CMAKE_CURRENT_BINARY_DIR}/openvino/lib")
 set(TRITON_OPENVINO_DOCKER_IMAGE "tritonserver_openvino")
 set(TRITON_OPENVINO_DOCKER_MEMORY "16g")
-if(TRITON_BUILD_OPENVINO_COMMIT_SHA)
-  set(OPENVINO_LIBRARY_STUB "openvino")
-else()
-  set(OPENVINO_LIBRARY_STUB "inference_engine")
-endif()
 if (WIN32)
-  if (${CMAKE_BUILD_TYPE} STREQUAL "Debug")
-    set(OPENVINO_LIBRARY "${OPENVINO_LIBRARY_STUB}d.lib")
-  else()
-    set(OPENVINO_LIBRARY "${OPENVINO_LIBRARY_STUB}.lib")
-  endif()
+  set(OPENVINO_LIBRARY "openvino.lib")
 else()
-  set(OPENVINO_LIBRARY "${OPENVINO_LIBRARY_STUB}.so")
+  set(OPENVINO_LIBRARY "openvino.so")
 endif() # WIN32
 
 #
@@ -192,7 +146,7 @@ set_target_properties(
   triton-openvino-backend
   PROPERTIES
     POSITION_INDEPENDENT_CODE ON
-    OUTPUT_NAME ${TRITON_OPENVINO_BACKEND_LIBNAME}
+    OUTPUT_NAME triton_openvino
     SKIP_BUILD_RPATH TRUE
     BUILD_WITH_INSTALL_RPATH TRUE
     INSTALL_RPATH_USE_LINK_PATH FALSE
@@ -228,16 +182,11 @@ target_link_libraries(
 #
 # Build the OpenVINO libraries using docker.
 #
-if(TRITON_BUILD_OPENVINO_COMMIT_SHA)
-  set(OPENVINO_CPU_PLUGIN_NAME "libopenvino_intel_cpu_plugin.so")
-else()
-  set(OPENVINO_CPU_PLUGIN_NAME "libMKLDNNPlugin.so")
-endif()
 if (WIN32)
   add_custom_command(
     OUTPUT
       openvino/lib/${OPENVINO_LIBRARY}
-    COMMAND python3 ${CMAKE_CURRENT_SOURCE_DIR}/tools/gen_openvino_dockerfile.py --build-type="${CMAKE_BUILD_TYPE}" --triton-container="${TRITON_BUILD_CONTAINER}" --openvino-version="${TRITON_BUILD_OPENVINO_VERSION}"  --openvino-commit-version="${TRITON_BUILD_OPENVINO_COMMIT_SHA}" --output=Dockerfile.openvino
+    COMMAND python3 ${CMAKE_CURRENT_SOURCE_DIR}/tools/gen_openvino_dockerfile.py --build-type="${CMAKE_BUILD_TYPE}" --triton-container="${TRITON_BUILD_CONTAINER}" --openvino-version="${TRITON_BUILD_OPENVINO_VERSION}" --output=Dockerfile.openvino
     COMMAND docker build --memory ${TRITON_OPENVINO_DOCKER_MEMORY} --cache-from=${TRITON_OPENVINO_DOCKER_IMAGE} --cache-from=${TRITON_OPENVINO_DOCKER_IMAGE}_cache0 --cache-from=${TRITON_OPENVINO_DOCKER_IMAGE}_cache1 -t ${TRITON_OPENVINO_DOCKER_IMAGE} -f ./Dockerfile.openvino ${CMAKE_CURRENT_SOURCE_DIR}
     COMMAND powershell.exe -noprofile -c "docker rm openvino_backend_ov > $null 2>&1; if ($LASTEXITCODE) { 'error ignored...' }; exit 0"
     COMMAND docker create --name openvino_backend_ov ${TRITON_OPENVINO_DOCKER_IMAGE}
@@ -250,14 +199,14 @@ else()
   add_custom_command(
     OUTPUT
       openvino/lib/${OPENVINO_LIBRARY}
-    COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/tools/gen_openvino_dockerfile.py --build-type="${CMAKE_BUILD_TYPE}" --triton-container="${TRITON_BUILD_CONTAINER}" --openvino-version="${TRITON_BUILD_OPENVINO_VERSION}" --use-prebuilt-openvino="${TRITON_BUILD_USE_PREBUILT_OPENVINO}" --openvino-commit-version="${TRITON_BUILD_OPENVINO_COMMIT_SHA}" --output=Dockerfile.openvino
+    COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/tools/gen_openvino_dockerfile.py --build-type="${CMAKE_BUILD_TYPE}" --triton-container="${TRITON_BUILD_CONTAINER}" --openvino-version="${TRITON_BUILD_OPENVINO_VERSION}" --output=Dockerfile.openvino
     COMMAND docker build --cache-from=${TRITON_OPENVINO_DOCKER_IMAGE} --cache-from=${TRITON_OPENVINO_DOCKER_IMAGE}_cache0 --cache-from=${TRITON_OPENVINO_DOCKER_IMAGE}_cache1 -t ${TRITON_OPENVINO_DOCKER_IMAGE} -f ./Dockerfile.openvino ${CMAKE_CURRENT_SOURCE_DIR}
     COMMAND docker rm openvino_backend_ov || echo "error ignored..." || true
     COMMAND docker create --name openvino_backend_ov ${TRITON_OPENVINO_DOCKER_IMAGE}
     COMMAND rm -fr openvino
     COMMAND docker cp openvino_backend_ov:/opt/openvino openvino
     COMMAND docker rm openvino_backend_ov
-    COMMAND echo '<ie><plugins><plugin name=\"CPU\" location=\"${OPENVINO_CPU_PLUGIN_NAME}\"></plugin></plugins></ie>' >> openvino/lib/plugins.xml
+    COMMAND echo '<ie><plugins><plugin name=\"CPU\" location=\"libopenvino_intel_cpu_plugin.so\"></plugin></plugins></ie>' >> openvino/lib/plugins.xml
     COMMENT "Building OpenVino"
   )
 endif() # WIN32
@@ -281,7 +230,7 @@ set(INSTALL_CONFIGDIR ${CMAKE_INSTALL_LIBDIR}/cmake/TritonOpenVINOBackend)
 install(
   DIRECTORY
     ${CMAKE_CURRENT_BINARY_DIR}/openvino/
-  DESTINATION ${CMAKE_INSTALL_PREFIX}/backends/${TRITON_OPENVINO_BACKEND_INSTALLDIR}
+  DESTINATION ${CMAKE_INSTALL_PREFIX}/backends/openvino
   PATTERN *lib EXCLUDE
   PATTERN *bin EXCLUDE
   PATTERN *include EXCLUDE
@@ -293,14 +242,14 @@ if (NOT WIN32)
       triton-openvino-backend
     EXPORT
       triton-openvino-backend-targets
-    LIBRARY DESTINATION ${CMAKE_INSTALL_PREFIX}/backends/${TRITON_OPENVINO_BACKEND_INSTALLDIR}
+    LIBRARY DESTINATION ${CMAKE_INSTALL_PREFIX}/backends/openvino
   )
 
   install(
     DIRECTORY
       ${CMAKE_CURRENT_BINARY_DIR}/openvino/lib/
     USE_SOURCE_PERMISSIONS
-    DESTINATION ${CMAKE_INSTALL_PREFIX}/backends/${TRITON_OPENVINO_BACKEND_INSTALLDIR}
+    DESTINATION ${CMAKE_INSTALL_PREFIX}/backends/openvino
   )
 else()
   install(
@@ -308,14 +257,14 @@ else()
       triton-openvino-backend
     EXPORT
       triton-openvino-backend-targets
-    RUNTIME DESTINATION ${CMAKE_INSTALL_PREFIX}/backends/${TRITON_OPENVINO_BACKEND_INSTALLDIR}
+    RUNTIME DESTINATION ${CMAKE_INSTALL_PREFIX}/backends/openvino
   )
 
   install(
     DIRECTORY
       ${CMAKE_CURRENT_BINARY_DIR}/openvino/bin/
     USE_SOURCE_PERMISSIONS
-    DESTINATION ${CMAKE_INSTALL_PREFIX}/backends/${TRITON_OPENVINO_BACKEND_INSTALLDIR}
+    DESTINATION ${CMAKE_INSTALL_PREFIX}/backends/openvino
   )
 endif() # WIN32
 

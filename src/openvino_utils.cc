@@ -1,4 +1,4 @@
-// Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
+// Copyright 2021-2022, NVIDIA CORPORATION. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -31,8 +31,7 @@
 namespace triton { namespace backend { namespace openvino {
 
 std::string
-ConvertVersionMapToString(
-    const std::map<std::string, InferenceEngine::Version>& version_map)
+ConvertVersionMapToString(const std::map<std::string, ov::Version>& version_map)
 {
   std::string result;
   for (const auto& it : version_map) {
@@ -41,94 +40,48 @@ ConvertVersionMapToString(
   return result;
 }
 
-std::string
-OpenVINOPrecisionToString(InferenceEngine::Precision openvino_precision)
-{
-  switch (openvino_precision) {
-    case InferenceEngine::Precision::UNSPECIFIED:
-      return "UNSPECIFIED";
-    case InferenceEngine::Precision::MIXED:
-      return "MIXED";
-    case InferenceEngine::Precision::FP32:
-      return "FLOAT";
-    case InferenceEngine::Precision::FP16:
-      return "FLOAT16";
-    case InferenceEngine::Precision::BF16:
-      return "BFLOAT16";
-    case InferenceEngine::Precision::Q78:
-      return "Q78";
-    case InferenceEngine::Precision::I16:
-      return "INT16";
-    case InferenceEngine::Precision::U8:
-      return "UINT8";
-    case InferenceEngine::Precision::I8:
-      return "INT8";
-    case InferenceEngine::Precision::U16:
-      return "UINT16";
-    case InferenceEngine::Precision::I32:
-      return "INT32";
-    case InferenceEngine::Precision::U32:
-      return "UINT32";
-    case InferenceEngine::Precision::I64:
-      return "INT64";
-    case InferenceEngine::Precision::U64:
-      return "UINT64";
-    case InferenceEngine::Precision::BIN:
-      return "BIN";
-    case InferenceEngine::Precision::BOOL:
-      return "BOOL";
-    case InferenceEngine::Precision::CUSTOM:
-      return "CUSTOM";
-    default:
-      break;
-  }
-
-  return "UNDEFINED";
-}
-
-TRITONSERVER_DataType ConvertFromOpenVINOPrecision(
-    InferenceEngine::Precision openvino_precision);
-
 TRITONSERVER_DataType
-ConvertFromOpenVINOPrecision(InferenceEngine::Precision openvino_precision)
+ConvertFromOpenVINOElement(ov::element::Type openvino_element)
 {
-  switch (openvino_precision) {
-    case InferenceEngine::Precision::FP32:
+  switch (openvino_element) {
+    case ov::element::f32:
       // maps to c type float (4 bytes)
       return TRITONSERVER_TYPE_FP32;
-    case InferenceEngine::Precision::U8:
+    case ov::element::u8:
       return TRITONSERVER_TYPE_UINT8;
-    case InferenceEngine::Precision::I8:
+    case ov::element::i8:
       return TRITONSERVER_TYPE_INT8;
-    case InferenceEngine::Precision::U16:
+    case ov::element::u16:
       return TRITONSERVER_TYPE_UINT16;
-    case InferenceEngine::Precision::I16:
+    case ov::element::i16:
       return TRITONSERVER_TYPE_INT16;
-    case InferenceEngine::Precision::I32:
+    case ov::element::i32:
       return TRITONSERVER_TYPE_INT32;
-    case InferenceEngine::Precision::I64:
+    case ov::element::i64:
       return TRITONSERVER_TYPE_INT64;
-    case InferenceEngine::Precision::BOOL:
+    case ov::element::boolean:
       return TRITONSERVER_TYPE_BOOL;
-    case InferenceEngine::Precision::FP16:
+    case ov::element::f16:
       return TRITONSERVER_TYPE_FP16;
-    case InferenceEngine::Precision::U32:
+    case ov::element::u32:
       return TRITONSERVER_TYPE_UINT32;
-    case InferenceEngine::Precision::U64:
+    case ov::element::u64:
       return TRITONSERVER_TYPE_UINT64;
     // The following types are not supported:
     // Unspecified value. Used by default
-    case InferenceEngine::Precision::UNSPECIFIED:
-    // Mixed value. Can be received from network. No applicable for tensors
-    case InferenceEngine::Precision::MIXED:
+    case ov::element::undefined:
+    // Dynamic value
+    case ov::element::dynamic:
     // 16bit floating point value, 8 bit for exponent, 7 bit for mantisa
-    case InferenceEngine::Precision::BF16:
-    // 16bit specific signed fixed point precision
-    case InferenceEngine::Precision::Q78:
-    // 1bit integer value
-    case InferenceEngine::Precision::BIN:
-    // custom precision has it's own name and size of elements
-    case InferenceEngine::Precision::CUSTOM:
+    case ov::element::bf16:
+    // 64bit floating point value
+    case ov::element::f64:
+    // 4bit integer value
+    case ov::element::i4:
+    // 1bit unsigned integer value
+    case ov::element::u1:
+    // 4bit unsigned integer value
+    case ov::element::u4:
     default:
       break;
   }
@@ -136,112 +89,80 @@ ConvertFromOpenVINOPrecision(InferenceEngine::Precision openvino_precision)
   return TRITONSERVER_TYPE_INVALID;
 }
 
-InferenceEngine::Precision
-ConvertToOpenVINOPrecision(TRITONSERVER_DataType data_type)
+ov::element::Type
+ConvertToOpenVINOElement(TRITONSERVER_DataType data_type)
 {
   switch (data_type) {
     case TRITONSERVER_TYPE_UINT8:
-      return InferenceEngine::Precision::U8;
+      return ov::element::u8;
     case TRITONSERVER_TYPE_UINT16:
-      return InferenceEngine::Precision::U16;
+      return ov::element::u16;
     case TRITONSERVER_TYPE_UINT32:
-      return InferenceEngine::Precision::U32;
+      return ov::element::u32;
     case TRITONSERVER_TYPE_UINT64:
-      return InferenceEngine::Precision::U64;
+      return ov::element::u64;
     case TRITONSERVER_TYPE_INT8:
-      return InferenceEngine::Precision::I8;
+      return ov::element::i8;
     case TRITONSERVER_TYPE_INT16:
-      return InferenceEngine::Precision::I16;
+      return ov::element::i16;
     case TRITONSERVER_TYPE_INT32:
-      return InferenceEngine::Precision::I32;
+      return ov::element::i32;
     case TRITONSERVER_TYPE_INT64:
-      return InferenceEngine::Precision::I64;
+      return ov::element::i64;
     case TRITONSERVER_TYPE_FP16:
-      return InferenceEngine::Precision::FP16;
+      return ov::element::f16;
     case TRITONSERVER_TYPE_FP32:
-      return InferenceEngine::Precision::FP32;
+      return ov::element::f32;
     case TRITONSERVER_TYPE_BOOL:
-      return InferenceEngine::Precision::BOOL;
+      return ov::element::boolean;
     default:
       break;
   }
 
-  return InferenceEngine::Precision::UNSPECIFIED;
+  return ov::element::undefined;
 }
 
-InferenceEngine::Precision
-ConvertToOpenVINOPrecision(const std::string& data_type_str)
+ov::element::Type
+ConvertToOpenVINOElement(const std::string& data_type_str)
 {
   TRITONSERVER_DataType data_type =
       TRITONSERVER_StringToDataType(data_type_str.c_str());
-  return ConvertToOpenVINOPrecision(data_type);
+  return ConvertToOpenVINOElement(data_type);
 }
 
-InferenceEngine::Precision
-ModelConfigDataTypeToOpenVINOPrecision(const std::string& data_type_str)
+ov::element::Type
+ModelConfigDataTypeToOpenVINOElement(const std::string& data_type_str)
 {
   // Must start with "TYPE_".
-  if (data_type_str.rfind("TYPE_", 0) != 0) {
-    return InferenceEngine::Precision::UNSPECIFIED;
+  if (data_type_str.rfind("TYPE_", 0) == 0) {
+    const std::string dtype = data_type_str.substr(strlen("TYPE_"));
+
+    if (dtype == "BOOL") {
+      return ov::element::boolean;
+    } else if (dtype == "UINT8") {
+      return ov::element::u8;
+    } else if (dtype == "UINT16") {
+      return ov::element::u16;
+    } else if (dtype == "UINT32") {
+      return ov::element::u32;
+    } else if (dtype == "UINT64") {
+      return ov::element::u64;
+    } else if (dtype == "INT8") {
+      return ov::element::i8;
+    } else if (dtype == "INT16") {
+      return ov::element::i16;
+    } else if (dtype == "INT32") {
+      return ov::element::i32;
+    } else if (dtype == "INT64") {
+      return ov::element::i64;
+    } else if (dtype == "FP16") {
+      return ov::element::f16;
+    } else if (dtype == "FP32") {
+      return ov::element::f32;
+    }
   }
 
-  const std::string dtype = data_type_str.substr(strlen("TYPE_"));
-
-  if (dtype == "BOOL") {
-    return InferenceEngine::Precision::BOOL;
-  } else if (dtype == "UINT8") {
-    return InferenceEngine::Precision::U8;
-  } else if (dtype == "UINT16") {
-    return InferenceEngine::Precision::U16;
-  } else if (dtype == "UINT32") {
-    return InferenceEngine::Precision::U32;
-  } else if (dtype == "UINT64") {
-    return InferenceEngine::Precision::U64;
-  } else if (dtype == "INT8") {
-    return InferenceEngine::Precision::I8;
-  } else if (dtype == "INT16") {
-    return InferenceEngine::Precision::I16;
-  } else if (dtype == "INT32") {
-    return InferenceEngine::Precision::I32;
-  } else if (dtype == "INT64") {
-    return InferenceEngine::Precision::I64;
-  } else if (dtype == "FP16") {
-    return InferenceEngine::Precision::FP16;
-  } else if (dtype == "FP32") {
-    return InferenceEngine::Precision::FP32;
-  }
-
-  return InferenceEngine::Precision::UNSPECIFIED;
-}
-
-std::string
-OpenVINOPrecisionToModelConfigDataType(InferenceEngine::Precision data_type)
-{
-  if (data_type == InferenceEngine::Precision::BOOL) {
-    return "TYPE_BOOL";
-  } else if (data_type == InferenceEngine::Precision::U8) {
-    return "TYPE_UINT8";
-  } else if (data_type == InferenceEngine::Precision::U16) {
-    return "TYPE_UINT16";
-  } else if (data_type == InferenceEngine::Precision::U32) {
-    return "TYPE_UINT32";
-  } else if (data_type == InferenceEngine::Precision::U64) {
-    return "TYPE_UINT64";
-  } else if (data_type == InferenceEngine::Precision::I8) {
-    return "TYPE_INT8";
-  } else if (data_type == InferenceEngine::Precision::I16) {
-    return "TYPE_INT16";
-  } else if (data_type == InferenceEngine::Precision::I32) {
-    return "TYPE_INT32";
-  } else if (data_type == InferenceEngine::Precision::I64) {
-    return "TYPE_INT64";
-  } else if (data_type == InferenceEngine::Precision::FP16) {
-    return "TYPE_FP16";
-  } else if (data_type == InferenceEngine::Precision::FP32) {
-    return "TYPE_FP32";
-  }
-
-  return "TYPE_INVALID";
+  return ov::element::undefined;
 }
 
 TRITONSERVER_Error*
@@ -337,147 +258,10 @@ ReadParameter(
   return nullptr;  // success
 }
 
-void
-SetBatchSize(const size_t batch_size, InferenceEngine::CNNNetwork* network)
-{
-  if (batch_size == 0) {
-    return;
-  }
-
-  InferenceEngine::InputsDataMap inputInfo(network->getInputsInfo());
-  InferenceEngine::ICNNNetwork::InputShapes shapes = network->getInputShapes();
-
-  bool reshape = false;
-  reshape |= AdjustShapesBatch(shapes, batch_size, inputInfo);
-
-  if (reshape) {
-    network->reshape(shapes);
-  }
-
-  // It is advisable not to use the setBatchSize API.
-  // std::cout << "Reshaping network: " << getShapesString(shapes) << std::endl;
-  // network->setBatchSize(batch_size);
-}
-
-bool
-AdjustShapesBatch(
-    InferenceEngine::ICNNNetwork::InputShapes& shapes, const size_t batch_size,
-    const InferenceEngine::InputsDataMap& input_info)
-{
-  bool updated = false;
-  for (auto& item : input_info) {
-    auto layout = item.second->getTensorDesc().getLayout();
-
-    int batch_index = -1;
-    if ((layout == InferenceEngine::Layout::NCHW) ||
-        (layout == InferenceEngine::Layout::NCDHW) ||
-        (layout == InferenceEngine::Layout::NHWC) ||
-        (layout == InferenceEngine::Layout::NDHWC) ||
-        (layout == InferenceEngine::Layout::NC)) {
-      batch_index = 0;
-    } else if (layout == InferenceEngine::Layout::CN) {
-      batch_index = 1;
-    }
-    if ((batch_index != -1) &&
-        (shapes.at(item.first).at(batch_index) != batch_size)) {
-      shapes[item.first][batch_index] = batch_size;
-      updated = true;
-    }
-  }
-  return updated;
-}
-
 std::vector<int64_t>
 ConvertToSignedShape(const std::vector<size_t> shape)
 {
   return std::vector<int64_t>{shape.begin(), shape.end()};
 }
-
-InferenceEngine::Blob::Ptr
-GetInputBlob(const InferenceEngine::TensorDesc& tensor_desc)
-{
-  auto precision{tensor_desc.getPrecision()};
-  if (precision == InferenceEngine::Precision::BOOL) {
-    return InferenceEngine::make_shared_blob<bool>(tensor_desc);
-  } else if (precision == InferenceEngine::Precision::U8) {
-    return InferenceEngine::make_shared_blob<uint8_t>(tensor_desc);
-  } else if (precision == InferenceEngine::Precision::U16) {
-    return InferenceEngine::make_shared_blob<uint16_t>(tensor_desc);
-  } else if (precision == InferenceEngine::Precision::U32) {
-    return InferenceEngine::make_shared_blob<uint32_t>(tensor_desc);
-  } else if (precision == InferenceEngine::Precision::U64) {
-    return InferenceEngine::make_shared_blob<uint64_t>(tensor_desc);
-  } else if (precision == InferenceEngine::Precision::I8) {
-    return InferenceEngine::make_shared_blob<int8_t>(tensor_desc);
-  } else if (precision == InferenceEngine::Precision::I16) {
-    return InferenceEngine::make_shared_blob<int16_t>(tensor_desc);
-  } else if (precision == InferenceEngine::Precision::I32) {
-    return InferenceEngine::make_shared_blob<int32_t>(tensor_desc);
-  } else if (precision == InferenceEngine::Precision::I64) {
-    return InferenceEngine::make_shared_blob<int64_t>(tensor_desc);
-  } else {
-    return InferenceEngine::make_shared_blob<float>(tensor_desc);
-  }
-}
-
-InferenceEngine::Blob::Ptr
-WrapInputBufferToBlob(
-    const InferenceEngine::TensorDesc& tensor_desc,
-    const void* input_buffer_ptr, size_t input_buffer_size)
-{
-  auto precision{tensor_desc.getPrecision()};
-  if (precision == InferenceEngine::Precision::BOOL) {
-    return InferenceEngine::make_shared_blob<bool>(
-        tensor_desc,
-        reinterpret_cast<bool*>(const_cast<void*>(input_buffer_ptr)),
-        input_buffer_size);
-  } else if (precision == InferenceEngine::Precision::U8) {
-    return InferenceEngine::make_shared_blob<uint8_t>(
-        tensor_desc,
-        reinterpret_cast<uint8_t*>(const_cast<void*>(input_buffer_ptr)),
-        input_buffer_size);
-  } else if (precision == InferenceEngine::Precision::U16) {
-    return InferenceEngine::make_shared_blob<uint16_t>(
-        tensor_desc,
-        reinterpret_cast<uint16_t*>(const_cast<void*>(input_buffer_ptr)),
-        input_buffer_size);
-  } else if (precision == InferenceEngine::Precision::U32) {
-    return InferenceEngine::make_shared_blob<uint32_t>(
-        tensor_desc,
-        reinterpret_cast<uint32_t*>(const_cast<void*>(input_buffer_ptr)),
-        input_buffer_size);
-  } else if (precision == InferenceEngine::Precision::U64) {
-    return InferenceEngine::make_shared_blob<uint64_t>(
-        tensor_desc,
-        reinterpret_cast<uint64_t*>(const_cast<void*>(input_buffer_ptr)),
-        input_buffer_size);
-  } else if (precision == InferenceEngine::Precision::I8) {
-    return InferenceEngine::make_shared_blob<int8_t>(
-        tensor_desc,
-        reinterpret_cast<int8_t*>(const_cast<void*>(input_buffer_ptr)),
-        input_buffer_size);
-  } else if (precision == InferenceEngine::Precision::I16) {
-    return InferenceEngine::make_shared_blob<int16_t>(
-        tensor_desc,
-        reinterpret_cast<int16_t*>(const_cast<void*>(input_buffer_ptr)),
-        input_buffer_size);
-  } else if (precision == InferenceEngine::Precision::I32) {
-    return InferenceEngine::make_shared_blob<int32_t>(
-        tensor_desc,
-        reinterpret_cast<int32_t*>(const_cast<void*>(input_buffer_ptr)),
-        input_buffer_size);
-  } else if (precision == InferenceEngine::Precision::I64) {
-    return InferenceEngine::make_shared_blob<int64_t>(
-        tensor_desc,
-        reinterpret_cast<int64_t*>(const_cast<void*>(input_buffer_ptr)),
-        input_buffer_size);
-  } else {
-    return InferenceEngine::make_shared_blob<float>(
-        tensor_desc,
-        reinterpret_cast<float*>(const_cast<void*>(input_buffer_ptr)),
-        input_buffer_size);
-  }
-}
-
 
 }}}  // namespace triton::backend::openvino
