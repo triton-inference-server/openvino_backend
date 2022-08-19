@@ -78,10 +78,10 @@ but the listed CMake argument can be used to override.
 Configuration of OpenVINO for a model is done through the Parameters section of the model's 'config.pbtxt' file. The parameters and their description are as follows.
 
 * `CPU_EXTENSION_PATH`: Required for CPU custom layers. Absolute path to a shared library with the kernels implementations.
-* `INFERENCE_NUM_THREADS`: Number of threads to use for inference on the CPU. Should be a non-negative number.
-* `COMPILATION_NUM_THREADS`: Number of threads to use for model loading/compilation. Should be a non-negative number.
-* `HINT_BF16`: Hint of floating point operations execution in bfloat16 precision on platforms with native bfloat16 support. Possible value is `YES`.
-* `NUM_STREAMS`: Enable threads->cores (`YES`, default) or threads->(NUMA)nodes (`NUMA`) CPU threads pinning for CPU-involved inference.
+* `INFERENCE_NUM_THREADS`: Maximum number of threads that can be used for inference tasks. Should be a non-negative number.
+* `COMPILATION_NUM_THREADS`: Maximum number of threads that can be used for compilation tasks. Should be a non-negative number.
+* `HINT_BF16`: Hint for device to use bfloat16 precision for inference. Possible value is `YES`.
+* `NUM_STREAMS`: The number of executor logical partitions. Set the value to `AUTO` to creates bare minimum of streams to improve the performance, or set the value to `NUMA` to creates as many streams as needed to accommodate NUMA and avoid associated penalties.
 * `SKIP_OV_DYNAMIC_BATCHSIZE`: The topology of some models do not support openVINO dynamic batch sizes. Set the value of this parameter to `YES`, in order
 to skip the dynamic batch sizes in backend.
 * `ENABLE_BATCH_PADDING`: By default an error will be generated if backend receives a request with batch size less than max_batch_size specified in the configuration. This error can be avoided at a cost of performance by specifying `ENABLE_BATCH_PADDING` parameter as `YES`.
