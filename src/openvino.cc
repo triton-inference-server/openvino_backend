@@ -1344,6 +1344,20 @@ TRITONBACKEND_ModelInstanceExecute(
   return nullptr;  // success
 }
 
+TRITONSERVER_Error*
+TRITONBACKEND_GetBackendAttribute(
+    TRITONBACKEND_Backend* backend,
+    TRITONBACKEND_BackendAttribute* backend_attributes)
+{
+  LOG_MESSAGE(
+      TRITONSERVER_LOG_VERBOSE,
+      "TRITONBACKEND_GetBackendAttribute: setting attributes");
+  RETURN_IF_ERROR(TRITONBACKEND_BackendAttributeAddPreferredInstanceGroup(backend_attributes,
+      TRITONSERVER_INSTANCEGROUPKIND_CPU, 0, nullptr, 0));
+
+  return nullptr;
+}
+
 }  // extern "C"
 
 }}}  // namespace triton::backend::openvino
