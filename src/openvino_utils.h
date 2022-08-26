@@ -87,6 +87,8 @@ ov::element::Type ConvertToOpenVINOElement(const std::string& data_type_str);
 
 ov::element::Type ModelConfigDataTypeToOpenVINOElement(
     const std::string& data_type_str);
+std::string OpenVINOElementToModelConfigDataType(
+    const ov::element::Type& data_type);
 
 TRITONSERVER_Error* CompareDimsSupported(
     const std::string& model_name, const std::string& tensor_name,

@@ -115,7 +115,14 @@ class ModelState : public BackendModel {
 
  private:
   ModelState(TRITONBACKEND_Model* triton_model);
+
   TRITONSERVER_Error* AutoCompleteConfig();
+  TRITONSERVER_Error* AutoCompleteBatching(
+      const std::vector<ov::Output<ov::Node>>& ov_inputs,
+      const std::vector<ov::Output<ov::Node>>& ov_outputs);
+  TRITONSERVER_Error* AutoCompleteInputOrOutput(
+      const char* io_json_obj_name,
+      const std::vector<ov::Output<ov::Node>>& ov_ios);
 
   // Shared resources among the multiple instances.
   ov::Core ov_core_;
@@ -632,12 +639,170 @@ ModelState::ValidateOutputs()
 TRITONSERVER_Error*
 ModelState::AutoCompleteConfig()
 {
-  // TODO: Add the support for auto completing config for this backend.
-  LOG_MESSAGE(
-      TRITONSERVER_LOG_WARN,
-      (std::string("skipping model configuration auto-complete for '") +
-       Name() + "': not supported for openvino backend")
-          .c_str());
+  // Read OV model for autocomplete
+  std::string artifact_name;
+  RETURN_IF_ERROR(
+      ModelConfig().MemberAsString("default_model_filename", &artifact_name));
+  std::string model_path;
+  THROW_IF_BACKEND_INSTANCE_ERROR(ReadModel(artifact_name, &model_path));
+  model_read_ = false;  // Re-read model after autocomplete
+
+  // Get OV model inputs and outputs
+  std::vector<ov::Output<ov::Node>> model_inputs;
+  std::vector<ov::Output<ov::Node>> model_outputs;
+  RETURN_IF_OPENVINO_ASSIGN_ERROR(
+      model_inputs, ov_model_->inputs(), "getting input infos");
+  RETURN_IF_OPENVINO_ASSIGN_ERROR(
+      model_outputs, ov_model_->outputs(), "getting output infos");
+
+  // Autocomplete batching
+  RETURN_IF_ERROR(AutoCompleteBatching(model_inputs, model_outputs));
+  // Autocomplete input
+  RETURN_IF_ERROR(AutoCompleteInputOrOutput("input", model_inputs));
+  // Autocomplete output
+  RETURN_IF_ERROR(AutoCompleteInputOrOutput("output", model_outputs));
+
+  return nullptr;  // success
+}
+
+TRITONSERVER_Error*
+ModelState::AutoCompleteBatching(
+    const std::vector<ov::Output<ov::Node>>& ov_inputs,
+    const std::vector<ov::Output<ov::Node>>& ov_outputs)
+{
+  // Determine batching support from model layout
+  bool support_batching = true;
+  {
+    for (const std::vector<ov::Output<ov::Node>>& ov_ios :
+         {ov_inputs, ov_outputs}) {
+      for (const ov::Output<ov::Node>& ov_io : ov_ios) {
+        // Get layout of the OV input/output
+        ov::Layout ov_layout = ov::layout::get_layout(ov_io);
+        // Check if this input/output support batching
+        if (!ov::layout::has_batch(ov_layout)) {
+          support_batching = false;
+          break;
+        }
+      }
+      if (!support_batching)
+        break;
+    }
+  }
+
+  if (support_batching) {
+    // The model layout support batching
+    // Autocomplete max_batch_size
+    if (MaxBatchSize() == 0) {
+      // Set max_batch_size
+      int max_batch_size = 1;
+      triton::common::TritonJson::Value max_batch_size_json;
+      ModelConfig().Find("max_batch_size", &max_batch_size_json);
+      max_batch_size_json.SetInt(max_batch_size);
+      SetMaxBatchSize(max_batch_size);
+      // Advise user to specify max_batch_size
+      LOG_MESSAGE(
+          TRITONSERVER_LOG_WARN,
+          (std::string(
+               "autofilled max_batch_size to " +
+               std::to_string(max_batch_size) + " for model '") +
+           Name() +
+           "' since batching is supported but no max_batch_size is "
+           "specified "
+           "in model configuration. Must specify max_batch_size to utilize "
+           "autofill with a larger max batch size")
+              .c_str());
+    }
+    // Autocomplete dynamic batching
+    if (MaxBatchSize() > 1) {
+      triton::common::TritonJson::Value tmp_json;
+      bool dynamic_batching_exist =
+          ModelConfig().Find("dynamic_batching", &tmp_json);
+      bool sequence_batching_exist =
+          ModelConfig().Find("sequence_batching", &tmp_json);
+      // Add dynamic batching if dynamic and sequence batching not provided
+      if (!dynamic_batching_exist && !sequence_batching_exist) {
+        triton::common::TritonJson::Value dynamic_batching_json(
+            ModelConfig(), triton::common::TritonJson::ValueType::OBJECT);
+        RETURN_IF_ERROR(ModelConfig().Add(
+            "dynamic_batching", std::move(dynamic_batching_json)));
+      }
+    }
+  } else if (MaxBatchSize() != 0) {
+    // The model layout does not support batching but max_batch_size != 0
+    // Not all openvino models include proper layout when batching is supported
+    // Warn the user about this discrepancy
+    LOG_MESSAGE(
+        TRITONSERVER_LOG_WARN,
+        (std::string("model layout for model ") + Name() +
+         " does not support batching while non-zero max_batch_size is "
+         "specified")
+            .c_str());
+  }
+
+  return nullptr;  // success
+}
+
+TRITONSERVER_Error*
+ModelState::AutoCompleteInputOrOutput(
+    const char* io_json_obj_name,
+    const std::vector<ov::Output<ov::Node>>& ov_ios)
+{
+  // Read current input/output json
+  size_t curr_num_ios = 0;
+  triton::common::TritonJson::Value curr_ios_json;
+  bool ios_exist = ModelConfig().Find(io_json_obj_name, &curr_ios_json);
+  if (ios_exist) {
+    curr_num_ios += curr_ios_json.ArraySize();
+  }
+
+  // Autocomplete inputs/outputs if none is provided
+  if (curr_num_ios == 0) {
+    // New input/output json to be build
+    triton::common::TritonJson::Value new_ios_json(
+        ModelConfig(), triton::common::TritonJson::ValueType::ARRAY);
+    // Populate new input/output json from OV inputs/outputs
+    for (const ov::Output<ov::Node>& ov_io : ov_ios) {
+      // New individual input/output
+      triton::common::TritonJson::Value io_json(
+          ModelConfig(), triton::common::TritonJson::ValueType::OBJECT);
+      // Populate name
+      std::string io_name = ov_io.get_any_name();
+      RETURN_IF_ERROR(io_json.AddString("name", io_name));
+      // Populate data type
+      RETURN_IF_ERROR(io_json.AddString(
+          "data_type",
+          OpenVINOElementToModelConfigDataType(ov_io.get_element_type())));
+      // Find shape
+      ov::Shape io_shape;
+      RETURN_IF_OPENVINO_ASSIGN_ERROR(
+          io_shape, ov_io.get_shape(),
+          ("retrieving original shapes from" + std::string(io_json_obj_name) +
+           " " + io_name)
+              .c_str());
+      // Populate dims
+      triton::common::TritonJson::Value dims(
+          ModelConfig(), triton::common::TritonJson::ValueType::ARRAY);
+      for (size_t i = (MaxBatchSize() > 0) ? 1 : 0; i < io_shape.size(); i++) {
+        RETURN_IF_ERROR(dims.AppendInt(io_shape[i]));
+      }
+      RETURN_IF_ERROR(io_json.Add("dims", std::move(dims)));
+      // Add individual input/output to new input/output
+      RETURN_IF_ERROR(new_ios_json.Append(std::move(io_json)));
+    }
+    // Add new input/output to config
+    if (ios_exist) {
+      curr_ios_json.Swap(new_ios_json);
+    } else {
+      ModelConfig().Add(io_json_obj_name, std::move(new_ios_json));
+    }
+  } else {
+    LOG_MESSAGE(
+        TRITONSERVER_LOG_INFO,
+        (std::string("skipping ") + io_json_obj_name +
+         " model configuration auto-complete for '" + Name() +
+         "': " + io_json_obj_name + " already specified")
+            .c_str());
+  }
 
   return nullptr;  // success
 }
@@ -683,9 +848,6 @@ class ModelInstanceState : public BackendModelInstance {
       std::vector<int64_t>* output_shape);
 
   ModelState* model_state_;
-
-  // The full path to the model file.
-  std::string model_path_;
 
   std::string device_;
   ov::InferRequest infer_request_;
@@ -735,9 +897,10 @@ ModelInstanceState::ModelInstanceState(
   }
 
   if (model_state_->ModelNotRead()) {
+    std::string model_path;
     THROW_IF_BACKEND_INSTANCE_ERROR(model_state_->ParseParameters());
     THROW_IF_BACKEND_INSTANCE_ERROR(
-        model_state_->ReadModel(ArtifactFilename(), &model_path_));
+        model_state_->ReadModel(ArtifactFilename(), &model_path));
     THROW_IF_BACKEND_INSTANCE_ERROR(model_state_->ValidateConfigureModel());
   }
 
@@ -1352,8 +1515,8 @@ TRITONBACKEND_GetBackendAttribute(
   LOG_MESSAGE(
       TRITONSERVER_LOG_VERBOSE,
       "TRITONBACKEND_GetBackendAttribute: setting attributes");
-  RETURN_IF_ERROR(TRITONBACKEND_BackendAttributeAddPreferredInstanceGroup(backend_attributes,
-      TRITONSERVER_INSTANCEGROUPKIND_CPU, 0, nullptr, 0));
+  RETURN_IF_ERROR(TRITONBACKEND_BackendAttributeAddPreferredInstanceGroup(
+      backend_attributes, TRITONSERVER_INSTANCEGROUPKIND_CPU, 0, nullptr, 0));
 
   return nullptr;
 }
