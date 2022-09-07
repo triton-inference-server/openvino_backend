@@ -54,6 +54,12 @@ IsNumber(const std::string& str)
 }
 }  // namespace
 
+// BackendConfiguration
+struct BackendConfiguration {
+  BackendConfiguration() : default_max_batch_size_(0) {}
+  int default_max_batch_size_;
+};
+
 //
 // ModelState
 //
@@ -693,8 +699,18 @@ ModelState::AutoCompleteBatching(
     // The model layout support batching
     // Autocomplete max_batch_size
     if (MaxBatchSize() == 0) {
+      // Get default_max_batch_size from backend state
+      int max_batch_size = 0;
+      {
+        TRITONBACKEND_Backend* backend;
+        THROW_IF_BACKEND_INSTANCE_ERROR(
+            TRITONBACKEND_ModelBackend(TritonModel(), &backend));
+        void* state;
+        THROW_IF_BACKEND_INSTANCE_ERROR(TRITONBACKEND_BackendState(backend, &state));
+        max_batch_size = reinterpret_cast<BackendConfiguration*>(state)->default_max_batch_size_;
+      }
+      max_batch_size = std::max(max_batch_size, 1);  // max_batch_size >= 1
       // Set max_batch_size
-      int max_batch_size = 1;
       triton::common::TritonJson::Value max_batch_size_json;
       ModelConfig().Find("max_batch_size", &max_batch_size_json);
       max_batch_size_json.SetInt(max_batch_size);
@@ -1359,6 +1375,44 @@ TRITONBACKEND_Initialize(TRITONBACKEND_Backend* backend)
          std::to_string(TRITONBACKEND_API_VERSION_MINOR))
             .c_str());
   }
+
+  // Read backend config message
+  TRITONSERVER_Message* backend_config_message;
+  RETURN_IF_ERROR(
+      TRITONBACKEND_BackendConfig(backend, &backend_config_message));
+  // Serialize message
+  const char* buffer;
+  size_t byte_size;
+  RETURN_IF_ERROR(TRITONSERVER_MessageSerializeToJson(
+      backend_config_message, &buffer, &byte_size));
+  // Convert message to JSON
+  triton::common::TritonJson::Value backend_config_json;
+  TRITONSERVER_Error* err = nullptr;
+  if (byte_size != 0) {
+    err = backend_config_json.Parse(buffer, byte_size);
+  }
+  RETURN_IF_ERROR(err);
+  // Create backend configuration
+  std::unique_ptr<BackendConfiguration> lconfig(new BackendConfiguration());
+  // Read command-line arguments from config
+  triton::common::TritonJson::Value cmd_json;
+  if (backend_config_json.Find("cmdline", &cmd_json)) {
+    // Find default-max-batch-size
+    triton::common::TritonJson::Value val_json;
+    if (cmd_json.Find("default-max-batch-size", &val_json)) {
+      // Get default-max-batch-size
+      std::string val_str;
+      RETURN_IF_ERROR(val_json.AsString(&val_str));
+      int val_int;
+      RETURN_IF_ERROR(ParseIntValue(val_str, &val_int));
+      // Write default-max-batch-size to backend configuration
+      lconfig->default_max_batch_size_ = val_int;
+    }
+  }
+  // Set backend configuration
+  RETURN_IF_ERROR(TRITONBACKEND_BackendSetState(
+      backend, reinterpret_cast<void*>(lconfig.get())));
+  lconfig.release();
 
   return nullptr;  // success
 }
