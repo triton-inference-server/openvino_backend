@@ -112,6 +112,51 @@ string_value:"5"
 
 ```
 
+## Auto-Complete Model Configuration
+
+Assuming Triton was not started with `--disable-auto-complete-config` command line
+option, the OpenVINO Backend makes use of the model configuration available in
+OpenVINO models to populate the required fields in the model's "config.pbtxt".
+You can learn more about Triton's support for auto-completing model
+configuration from
+[here](https://github.com/triton-inference-server/server/blob/main/docs/model_configuration.md#auto-generated-model-configuration).
+
+However, not all OpenVINO models carry sufficient configuration information to
+auto-complete the model's "config.pbtxt". As a result, a partial "config.pbtxt"
+could still be required for some models.
+
+OpenVINO backend can complete the following fields in model configuration:
+
+### max_batch_size
+
+Auto-completing max_batch_size follows the following rules:
+
+- The model has included sufficient layout information.
+- Autocomplete has determined the model is capable of batching requests.
+- `max_batch_size` is 0 in the model configuration or max_batch_size is omitted
+from the model configuration.
+
+If the above two rules are met, max_batch_size is set to
+default-max-batch-size. Otherwise max_batch_size is set as 0.
+
+### Inputs and Outputs
+
+The OpenVINO Backend is able to fill in the `name`, `data_type`, and `dims` provided this
+information is available in the model.
+
+Autocompleting inputs/outputs follows the following rules:
+- If `inputs` and/or `outputs` is empty or undefined in the model
+configuration, the missing inputs and/or outputs will be autocompleted.
+- Auto-complete will skip over any defined/filled-in inputs and outputs.
+
+### Dynamic Batching
+
+If `max_batch_size > 1`, after auto-completing `max_batch_size`, and no
+[`dynamic_batching`](https://github.com/triton-inference-server/server/blob/main/docs/model_configuration.md#dynamic-batcher)
+and
+[`sequence_batching`](https://github.com/triton-inference-server/server/blob/main/docs/model_configuration.md#sequence-batcher)
+is provided, then `dynamic_batching` will be enabled with default settings.
+
 ## Known Issues
 
 * Not all models support dynamic batch sizes.

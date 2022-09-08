@@ -165,6 +165,36 @@ ModelConfigDataTypeToOpenVINOElement(const std::string& data_type_str)
   return ov::element::undefined;
 }
 
+std::string
+OpenVINOElementToModelConfigDataType(const ov::element::Type& data_type)
+{
+  if (data_type == ov::element::boolean) {
+    return "TYPE_BOOL";
+  } else if (data_type == ov::element::u8) {
+    return "TYPE_UINT8";
+  } else if (data_type == ov::element::u16) {
+    return "TYPE_UINT16";
+  } else if (data_type == ov::element::u32) {
+    return "TYPE_UINT32";
+  } else if (data_type == ov::element::u64) {
+    return "TYPE_UINT64";
+  } else if (data_type == ov::element::i8) {
+    return "TYPE_INT8";
+  } else if (data_type == ov::element::i16) {
+    return "TYPE_INT16";
+  } else if (data_type == ov::element::i32) {
+    return "TYPE_INT32";
+  } else if (data_type == ov::element::i64) {
+    return "TYPE_INT64";
+  } else if (data_type == ov::element::f16) {
+    return "TYPE_FP16";
+  } else if (data_type == ov::element::f32) {
+    return "TYPE_FP32";
+  }
+
+  return "TYPE_INVALID";
+}
+
 TRITONSERVER_Error*
 CompareDimsSupported(
     const std::string& model_name, const std::string& tensor_name,
