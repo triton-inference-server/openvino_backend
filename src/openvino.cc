@@ -280,7 +280,7 @@ ModelState::LoadCpuExtensions(triton::common::TritonJson::Value& params)
     // CPU (MKLDNN) extensions is loaded as a shared library and passed as a
     // pointer to base extension
     const auto extension_ptr =
-        std::make_shared<Extension>(
+        std::make_shared<InferenceEngine::Extension>(
             cpu_ext_path);
     RETURN_IF_OPENVINO_ERROR(
         inference_engine_.AddExtension(extension_ptr),
