@@ -119,7 +119,7 @@ option, the OpenVINO Backend makes use of the model configuration available in
 OpenVINO models to populate the required fields in the model's "config.pbtxt".
 You can learn more about Triton's support for auto-completing model
 configuration from
-[here](https://github.com/triton-inference-server/server/blob/main/docs/model_configuration.md#auto-generated-model-configuration).
+[here](https://github.com/triton-inference-server/server/blob/main/docs/user_guide/model_configuration.md#auto-generated-model-configuration).
 
 However, not all OpenVINO models carry sufficient configuration information to
 auto-complete the model's "config.pbtxt". As a result, a partial "config.pbtxt"
@@ -152,9 +152,9 @@ configuration, the missing inputs and/or outputs will be autocompleted.
 ### Dynamic Batching
 
 If `max_batch_size > 1`, after auto-completing `max_batch_size`, and no
-[`dynamic_batching`](https://github.com/triton-inference-server/server/blob/main/docs/model_configuration.md#dynamic-batcher)
+[`dynamic_batching`](https://github.com/triton-inference-server/server/blob/main/docs/user_guide/model_configuration.md#dynamic-batcher)
 and
-[`sequence_batching`](https://github.com/triton-inference-server/server/blob/main/docs/model_configuration.md#sequence-batcher)
+[`sequence_batching`](https://github.com/triton-inference-server/server/blob/main/docs/user_guide/model_configuration.md#sequence-batcher)
 is provided, then `dynamic_batching` will be enabled with default settings.
 
 ## Known Issues
