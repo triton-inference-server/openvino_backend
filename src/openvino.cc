@@ -1385,6 +1385,8 @@ TRITONBACKEND_Initialize(TRITONBACKEND_Backend* backend)
   size_t byte_size;
   RETURN_IF_ERROR(TRITONSERVER_MessageSerializeToJson(
       backend_config_message, &buffer, &byte_size));
+  RETURN_IF_ERROR(TRITONSERVER_MessageDelete(backend_config_message));
+
   // Convert message to JSON
   triton::common::TritonJson::Value backend_config_json;
   TRITONSERVER_Error* err = nullptr;
@@ -1412,7 +1414,7 @@ TRITONBACKEND_Initialize(TRITONBACKEND_Backend* backend)
   // Set backend configuration
   RETURN_IF_ERROR(TRITONBACKEND_BackendSetState(
       backend, reinterpret_cast<void*>(lconfig.get())));
-  lconfig.release();
+  lconfig.reset();
 
   return nullptr;  // success
 }
