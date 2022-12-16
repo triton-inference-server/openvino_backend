@@ -706,8 +706,10 @@ ModelState::AutoCompleteBatching(
         THROW_IF_BACKEND_INSTANCE_ERROR(
             TRITONBACKEND_ModelBackend(TritonModel(), &backend));
         void* state;
-        THROW_IF_BACKEND_INSTANCE_ERROR(TRITONBACKEND_BackendState(backend, &state));
-        max_batch_size = reinterpret_cast<BackendConfiguration*>(state)->default_max_batch_size_;
+        THROW_IF_BACKEND_INSTANCE_ERROR(
+            TRITONBACKEND_BackendState(backend, &state));
+        max_batch_size = reinterpret_cast<BackendConfiguration*>(state)
+                             ->default_max_batch_size_;
       }
       max_batch_size = std::max(max_batch_size, 1);  // max_batch_size >= 1
       // Set max_batch_size
@@ -1417,9 +1419,16 @@ TRITONBACKEND_Initialize(TRITONBACKEND_Backend* backend)
   return nullptr;  // success
 }
 
+// Implementing TRITONBACKEND_Finalize is optional unless state is set
+// using TRITONBACKEND_BackendSetState. The backend must free this
+// state and perform any other global cleanup.
 TRITONBACKEND_ISPEC TRITONSERVER_Error*
 TRITONBACKEND_Finalize(TRITONBACKEND_Backend* backend)
 {
+  void* vstate;
+  RETURN_IF_ERROR(TRITONBACKEND_BackendState(backend, &vstate));
+  auto config = reinterpret_cast<BackendConfiguration*>(vstate);
+  delete config;
   return nullptr;  // success
 }
 
