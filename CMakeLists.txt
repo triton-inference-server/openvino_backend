@@ -80,7 +80,9 @@ set(TRITON_OPENVINO_DOCKER_MEMORY "16g")
 if (WIN32)
   set(OPENVINO_LIBRARY "openvino.lib")
 else()
-  set(OPENVINO_LIBRARY "openvino.so")
+  # NOTE: Not sure why this worked before without "lib" prefix
+  #set(OPENVINO_LIBRARY "openvino.so")
+  set(OPENVINO_LIBRARY "libopenvino.so")
 endif() # WIN32
 
 #
@@ -202,7 +204,7 @@ else()
     COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/tools/gen_openvino_dockerfile.py --build-type="${CMAKE_BUILD_TYPE}" --triton-container="${TRITON_BUILD_CONTAINER}" --openvino-version="${TRITON_BUILD_OPENVINO_VERSION}" --output=Dockerfile.openvino
     COMMAND docker build --cache-from=${TRITON_OPENVINO_DOCKER_IMAGE} --cache-from=${TRITON_OPENVINO_DOCKER_IMAGE}_cache0 --cache-from=${TRITON_OPENVINO_DOCKER_IMAGE}_cache1 -t ${TRITON_OPENVINO_DOCKER_IMAGE} -f ./Dockerfile.openvino ${CMAKE_CURRENT_SOURCE_DIR}
     COMMAND docker rm openvino_backend_ov || echo "error ignored..." || true
-    COMMAND docker create --name openvino_backend_ov ${TRITON_OPENVINO_DOCKER_IMAGE}
+    COMMAND docker create --name openvino_backend_ov ${TRITON_OPENVINO_DOCKER_IMAGE} bash
     COMMAND rm -fr openvino
     COMMAND docker cp openvino_backend_ov:/opt/openvino openvino
     COMMAND docker rm openvino_backend_ov

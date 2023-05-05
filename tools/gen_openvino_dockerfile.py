@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright 2021-2022, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# Copyright 2021-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -65,6 +65,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         make \
         build-essential \
         wget \
+        gnupg2 \
         ca-certificates
 
 # Build instructions:
@@ -74,46 +75,34 @@ ARG OPENVINO_VERSION
 ARG OPENVINO_BUILD_TYPE
 WORKDIR /workspace
 
-# When git cloning it is important that we include '-b' and branchname
-# so that this command is re-run when the branch changes, otherwise it
-# will be cached by docker and continue using an old clone/branch. We
-# are relying on the use of a release branch that does not change once
-# it is released (if a patch is needed for that release we expect
-# there to be a new version).
-RUN git clone -b ${OPENVINO_VERSION} https://github.com/openvinotoolkit/openvino.git
-
-WORKDIR /workspace/openvino
-RUN git submodule update --init --recursive
-
-WORKDIR /workspace/openvino/build
-RUN /bin/bash -c 'cmake \
-        -DCMAKE_BUILD_TYPE=${OPENVINO_BUILD_TYPE} \
-        -DCMAKE_INSTALL_PREFIX=/workspace/install \
-        -DENABLE_VPU=OFF \
-        -DENABLE_CLDNN=OFF \
-        -DTHREADING=OMP \
-        -DENABLE_GNA=OFF \
-        -DENABLE_DLIA=OFF \
-        -DENABLE_TESTS=OFF \
-        -DENABLE_INTEL_MYRIAD=OFF \
-        -DENABLE_VALIDATION_SET=OFF \
-        -DNGRAPH_ONNX_IMPORT_ENABLE=OFF \
-        -DNGRAPH_DEPRECATED_ENABLE=FALSE \
-        .. && \
-    TEMPCV_DIR=/workspace/openvino/temp/opencv_4* && \
-    OPENCV_DIRS=$(ls -d -1 ${TEMPCV_DIR}) && \
-    export LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:${OPENCV_DIRS[0]}/opencv/lib && \
-    make -j$(nproc) install'
+# apt install Ubuntu 20.04 (focal) openvino package since building openvino
+# from source not currently supported in Ubuntu 22.04
+RUN wget https://apt.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB && \
+    apt-key add GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB && \
+    rm GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB && \
+    echo "deb https://apt.repos.intel.com/openvino/2022 focal main" > /etc/apt/sources.list.d/intel-openvino-2022.list && \
+    apt update -y && \
+    apt install -y openvino-${OPENVINO_VERSION}
 
 WORKDIR /opt/openvino
-RUN cp -r /workspace/openvino/licensing LICENSE.openvino
+
+# NOTE: didn't find licensing in apt install, not sure if needed
+# RUN cp -r /workspace/openvino/licensing LICENSE.openvino
+
+# NOTE: openvino-2022.1.0 installs to both "openvino_2022" and 
+# "openvino_2022.1.0.643" which don't match OPENVINO_VERSION, so
+# just hardcode it as openvino_2022 for now
 RUN mkdir -p include && \
-    cp -r /workspace/install/runtime/include/ie/* include/. && \
-    cp -r /workspace/install/runtime/include/ngraph include/. && \
-    cp -r /workspace/install/runtime/include/openvino include/.
+    cp -r /opt/intel/openvino_2022/runtime/include/ie/* include/. && \
+    cp -r /opt/intel/openvino_2022/runtime/include/ngraph include/. && \
+    cp -r /opt/intel/openvino_2022/runtime/include/openvino include/.
 RUN mkdir -p lib && \
-    cp /workspace/install/runtime/lib/intel64/*.so lib/. && \
-    cp /workspace/install/runtime/3rdparty/omp/lib/libiomp5.so lib/.
+    cp /opt/intel/openvino_2022/runtime/lib/intel64/*.so lib/. && \
+    cp /opt/intel/openvino_2022/runtime/3rdparty/tbb/lib/*.so lib/. && \
+    pwd && ls lib
+
+# NOTE: apt package installs 3rdparty/tbb instead of 3rdparty/omp, so skip omp for now
+## cp /opt/intel/openvino_2022/runtime/3rdparty/omp/lib/libiomp5.so lib/.
 '''
 
     df += '''
