@@ -99,10 +99,9 @@ RUN /bin/bash -c 'cmake \
         -DENABLE_VALIDATION_SET=OFF \
         -DNGRAPH_ONNX_IMPORT_ENABLE=OFF \
         -DNGRAPH_DEPRECATED_ENABLE=FALSE \
+        -DENABLE_OPENCV=OFF \
+        -DTREAT_WARNING_AS_ERROR=OFF \
         .. && \
-    TEMPCV_DIR=/workspace/openvino/temp/opencv_4* && \
-    OPENCV_DIRS=$(ls -d -1 ${TEMPCV_DIR}) && \
-    export LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:${OPENCV_DIRS[0]}/opencv/lib && \
     make -j$(nproc) install'
 
 WORKDIR /opt/openvino
