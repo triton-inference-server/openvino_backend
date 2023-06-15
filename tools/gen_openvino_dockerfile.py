@@ -29,6 +29,7 @@ import argparse
 import os
 import platform
 
+
 def target_platform():
     if FLAGS.target_platform is not None:
         return FLAGS.target_platform
