@@ -108,12 +108,23 @@ RUN /bin/bash -c 'cmake \
 WORKDIR /opt/openvino
 RUN cp -r /workspace/openvino/licensing LICENSE.openvino
 RUN mkdir -p include && \
-    cp -r /workspace/install/runtime/include/ie/* include/. && \
     cp -r /workspace/install/runtime/include/ngraph include/. && \
     cp -r /workspace/install/runtime/include/openvino include/.
 RUN mkdir -p lib && \
-    cp /workspace/install/runtime/lib/intel64/*.so lib/. && \
-    cp /workspace/install/runtime/3rdparty/omp/lib/libiomp5.so lib/.
+    cp /workspace/install/runtime/lib/intel64/libopenvino.so.${OPENVINO_VERSION} lib/. && \
+    cp /workspace/install/runtime/lib/intel64/libopenvino_c.so.${OPENVINO_VERSION} lib/. && \
+    cp /workspace/install/runtime/lib/intel64/libopenvino_intel_cpu_plugin.so lib/. && \
+    cp /workspace/install/runtime/lib/intel64/libopenvino_ir_frontend.so.${OPENVINO_VERSION} lib/.
+RUN OV_SHORT_VERSION=`echo ${OPENVINO_VERSION} | awk '{print substr($0,3,2)}'` && \
+    OV_SHORT_VERSION=${OV_SHORT_VERSION}`echo ${OPENVINO_VERSION} | awk '{print substr($0,6,1)}'` && \
+    OV_SHORT_VERSION=${OV_SHORT_VERSION}`echo ${OPENVINO_VERSION} | awk '{print substr($0,8,1)}'` && \
+    (cd lib && \
+        ln -s libopenvino.so.${OPENVINO_VERSION} libopenvino.so.${OV_SHORT_VERSION} && \
+        ln -s libopenvino.so.${OV_SHORT_VERSION} libopenvino.so && \
+        ln -s libopenvino_c.so.${OPENVINO_VERSION} libopenvino_c.so.${OV_SHORT_VERSION} && \
+        ln -s libopenvino_c.so.${OV_SHORT_VERSION} libopenvino_c.so && \
+        ln -s libopenvino_ir_frontend.so.${OPENVINO_VERSION} libopenvino_ir_frontend.so.${OV_SHORT_VERSION} && \
+        ln -s libopenvino_ir_frontend.so.${OV_SHORT_VERSION} libopenvino_ir_frontend.so)
 '''
 
     df += '''
