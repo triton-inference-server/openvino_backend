@@ -86,7 +86,7 @@ endif() # WIN32
 #
 # Dependencies
 #
-# FetchContent's composibility isn't very good. We must include the
+# FetchContent's composability isn't very good. We must include the
 # transitive closure of all repos so that we can override the tag.
 #
 include(FetchContent)
