@@ -115,16 +115,14 @@ RUN mkdir -p lib && \
     cp /workspace/install/runtime/lib/intel64/libopenvino_c.so.${OPENVINO_VERSION} lib/. && \
     cp /workspace/install/runtime/lib/intel64/libopenvino_intel_cpu_plugin.so lib/. && \
     cp /workspace/install/runtime/lib/intel64/libopenvino_ir_frontend.so.${OPENVINO_VERSION} lib/.
-RUN OV_SHORT_VERSION=`echo ${OPENVINO_VERSION} | awk '{print substr($0,3,2)}'` && \
-    OV_SHORT_VERSION=${OV_SHORT_VERSION}`echo ${OPENVINO_VERSION} | awk '{print substr($0,6,1)}'` && \
-    OV_SHORT_VERSION=${OV_SHORT_VERSION}`echo ${OPENVINO_VERSION} | awk '{print substr($0,8,1)}'` && \
+RUN OV_SHORT_VERSION=`echo ${OPENVINO_VERSION} | awk '{ split($0,a,"."); print substr(a[1],3) a[2] a[3] }'` && \
     (cd lib && \
         ln -s libopenvino.so.${OPENVINO_VERSION} libopenvino.so.${OV_SHORT_VERSION} && \
-        ln -s libopenvino.so.${OV_SHORT_VERSION} libopenvino.so && \
+        ln -s libopenvino.so.${OPENVINO_VERSION} libopenvino.so && \
         ln -s libopenvino_c.so.${OPENVINO_VERSION} libopenvino_c.so.${OV_SHORT_VERSION} && \
-        ln -s libopenvino_c.so.${OV_SHORT_VERSION} libopenvino_c.so && \
+        ln -s libopenvino_c.so.${OPENVINO_VERSION} libopenvino_c.so && \
         ln -s libopenvino_ir_frontend.so.${OPENVINO_VERSION} libopenvino_ir_frontend.so.${OV_SHORT_VERSION} && \
-        ln -s libopenvino_ir_frontend.so.${OV_SHORT_VERSION} libopenvino_ir_frontend.so)
+        ln -s libopenvino_ir_frontend.so.${OPENVINO_VERSION} libopenvino_ir_frontend.so)
 '''
 
     df += '''
