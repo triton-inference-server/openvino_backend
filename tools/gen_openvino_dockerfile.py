@@ -100,7 +100,6 @@ RUN /bin/bash -c 'cmake \
         -DENABLE_VALIDATION_SET=OFF \
         -DNGRAPH_ONNX_IMPORT_ENABLE=OFF \
         -DNGRAPH_DEPRECATED_ENABLE=FALSE \
-        -DENABLE_OPENCV=OFF \
         -DTREAT_WARNING_AS_ERROR=OFF \
         .. && \
     make -j$(nproc) install'
