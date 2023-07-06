@@ -184,10 +184,12 @@ RUN xcopy /I /E \\workspace\\install\\runtime\\include\\ngraph include\\ngraph
 RUN xcopy /I /E \\workspace\\install\\runtime\\include\\openvino include\\openvino
 RUN xcopy /I /E \\workspace\\install\\runtime\\bin\\intel64\\%OPENVINO_BUILD_TYPE% bin
 RUN xcopy /I /E \\workspace\\install\\runtime\\lib\\intel64\\%OPENVINO_BUILD_TYPE% lib
-RUN copy \\workspace\\install\\runtime\\3rdparty\\tbb\\bin\\tbb.dll bin\\tbb.dll
-RUN copy \\workspace\\install\\runtime\\3rdparty\\tbb\\bin\\tbb_debug.dll bin\\tbb_debug.dll
+RUN copy \\workspace\\install\\runtime\\3rdparty\\tbb\\bin\\tbb12.dll bin\\tbb12.dll
+RUN copy \\workspace\\install\\runtime\\3rdparty\\tbb\\bin\\tbb12_debug.dll bin\\tbb12_debug.dll
 RUN copy \\workspace\\install\\runtime\\3rdparty\\tbb\\lib\\tbb.lib lib\\tbb.lib
 RUN copy \\workspace\\install\\runtime\\3rdparty\\tbb\\lib\\tbb_debug.lib lib\\tbb_debug.lib
+RUN copy \\workspace\\install\\runtime\\3rdparty\\tbb\\lib\\tbb12.lib lib\\tbb12.lib
+RUN copy \\workspace\\install\\runtime\\3rdparty\\tbb\\lib\\tbb12_debug.lib lib\\tbb12_debug.lib
 '''
 
     with open(FLAGS.output, "w") as dfile:
