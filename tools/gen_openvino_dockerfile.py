@@ -37,23 +37,25 @@ def target_platform():
 
 
 def dockerfile_common():
-    df = '''
+    df = """
 ARG BASE_IMAGE={}
 ARG OPENVINO_VERSION={}
 ARG OPENVINO_BUILD_TYPE={}
-'''.format(FLAGS.triton_container, FLAGS.openvino_version, FLAGS.build_type)
+""".format(
+        FLAGS.triton_container, FLAGS.openvino_version, FLAGS.build_type
+    )
 
-    df += '''
+    df += """
 FROM ${BASE_IMAGE}
 WORKDIR /workspace
-'''
+"""
 
     return df
 
 
 def dockerfile_for_linux(output_file):
     df = dockerfile_common()
-    df += '''
+    df += """
 # Ensure apt-get won't prompt for selecting options
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -121,14 +123,14 @@ RUN OV_SHORT_VERSION=`echo ${OPENVINO_VERSION} | awk '{ split($0,a,"."); print s
         ln -s libopenvino_c.so.${OPENVINO_VERSION} libopenvino_c.so && \
         ln -s libopenvino_ir_frontend.so.${OPENVINO_VERSION} libopenvino_ir_frontend.so.${OV_SHORT_VERSION} && \
         ln -s libopenvino_ir_frontend.so.${OPENVINO_VERSION} libopenvino_ir_frontend.so)
-'''
+"""
 
-    df += '''
+    df += """
 RUN (cd lib && \
      for i in `find . -mindepth 1 -maxdepth 1 -type f -name '*\.so*'`; do \
         patchelf --set-rpath '$ORIGIN' $i; \
      done)
-'''
+"""
 
     with open(FLAGS.output, "w") as dfile:
         dfile.write(df)
@@ -136,7 +138,7 @@ RUN (cd lib && \
 
 def dockerfile_for_windows(output_file):
     df = dockerfile_common()
-    df += '''
+    df += """
 SHELL ["cmd", "/S", "/C"]
 
 # Build instructions:
@@ -186,43 +188,44 @@ RUN copy \\workspace\\install\\runtime\\3rdparty\\tbb\\lib\\tbb.lib lib\\tbb.lib
 RUN copy \\workspace\\install\\runtime\\3rdparty\\tbb\\lib\\tbb_debug.lib lib\\tbb_debug.lib
 RUN copy \\workspace\\install\\runtime\\3rdparty\\tbb\\lib\\tbb12.lib lib\\tbb12.lib
 RUN copy \\workspace\\install\\runtime\\3rdparty\\tbb\\lib\\tbb12_debug.lib lib\\tbb12_debug.lib
-'''
+"""
 
     with open(FLAGS.output, "w") as dfile:
         dfile.write(df)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('--triton-container',
-                        type=str,
-                        required=True,
-                        help='Triton base container to use for build.')
-    parser.add_argument('--openvino-version',
-                        type=str,
-                        required=True,
-                        help='OpenVINO version.')
-    parser.add_argument('--build-type',
-                        type=str,
-                        default='Release',
-                        required=False,
-                        help='CMAKE_BUILD_TYPE for OpenVINO build.')
-    parser.add_argument('--output',
-                        type=str,
-                        required=True,
-                        help='File to write Dockerfile to.')
     parser.add_argument(
-        '--target-platform',
+        "--triton-container",
+        type=str,
+        required=True,
+        help="Triton base container to use for build.",
+    )
+    parser.add_argument(
+        "--openvino-version", type=str, required=True, help="OpenVINO version."
+    )
+    parser.add_argument(
+        "--build-type",
+        type=str,
+        default="Release",
+        required=False,
+        help="CMAKE_BUILD_TYPE for OpenVINO build.",
+    )
+    parser.add_argument(
+        "--output", type=str, required=True, help="File to write Dockerfile to."
+    )
+    parser.add_argument(
+        "--target-platform",
         required=False,
         default=None,
-        help=
-        'Target for build, can be "ubuntu" or "windows". If not specified, build targets the current platform.'
+        help='Target for build, can be "ubuntu" or "windows". If not specified, build targets the current platform.',
     )
 
     FLAGS = parser.parse_args()
 
-    if target_platform() == 'windows':
+    if target_platform() == "windows":
         dockerfile_for_windows(FLAGS.output)
     else:
         dockerfile_for_linux(FLAGS.output)
