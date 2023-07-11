@@ -114,7 +114,8 @@ RUN mkdir -p lib && \
     cp /workspace/install/runtime/lib/intel64/libopenvino.so.${OPENVINO_VERSION} lib/. && \
     cp /workspace/install/runtime/lib/intel64/libopenvino_c.so.${OPENVINO_VERSION} lib/. && \
     cp /workspace/install/runtime/lib/intel64/libopenvino_intel_cpu_plugin.so lib/. && \
-    cp /workspace/install/runtime/lib/intel64/libopenvino_ir_frontend.so.${OPENVINO_VERSION} lib/.
+    cp /workspace/install/runtime/lib/intel64/libopenvino_ir_frontend.so.${OPENVINO_VERSION} lib/. && \
+    cp /usr/lib/x86_64-linux-gnu/libtbb.so.12 lib/.
 RUN OV_SHORT_VERSION=`echo ${OPENVINO_VERSION} | awk '{ split($0,a,"."); print substr(a[1],3) a[2] a[3] }'` && \
     (cd lib && \
         ln -s libopenvino.so.${OPENVINO_VERSION} libopenvino.so.${OV_SHORT_VERSION} && \
