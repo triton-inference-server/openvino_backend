@@ -111,6 +111,7 @@ RUN mkdir -p include && \
     cp -r /workspace/install/runtime/include/ngraph include/. && \
     cp -r /workspace/install/runtime/include/openvino include/.
 RUN mkdir -p lib && \
+    cp /workspace/install/runtime/lib/intel64/libiomp5.so lib/. && \
     cp /workspace/install/runtime/lib/intel64/libopenvino.so.${OPENVINO_VERSION} lib/. && \
     cp /workspace/install/runtime/lib/intel64/libopenvino_c.so.${OPENVINO_VERSION} lib/. && \
     cp /workspace/install/runtime/lib/intel64/libopenvino_intel_cpu_plugin.so lib/. && \
