@@ -134,6 +134,8 @@ class ModelState : public BackendModel {
   ov::Core ov_core_;
   std::shared_ptr<ov::Model> ov_model_;
   std::map<std::string, ov::CompiledModel> compiled_model_;
+  // Protect concurrent access of model state by instances
+  std::mutex model_mtx_;
   // Maps device to their respective parameters
   std::map<std::string, std::vector<std::pair<std::string, ov::Any>>> config_;
   bool model_read_;
@@ -448,7 +450,7 @@ ModelState::ModelNotRead()
 }
 
 bool
-ModelState::ModelNotLoaded(const std::string device)
+ModelState::ModelNotLoaded(const std::string& device)
 {
   auto itr = compiled_model_.find(device);
   return (itr == compiled_model_.end());
@@ -914,29 +916,39 @@ ModelInstanceState::ModelInstanceState(
             .c_str()));
   }
 
-  if (model_state_->ModelNotRead()) {
-    std::string model_path;
-    THROW_IF_BACKEND_INSTANCE_ERROR(model_state_->ParseParameters());
-    THROW_IF_BACKEND_INSTANCE_ERROR(
-        model_state_->ReadModel(ArtifactFilename(), &model_path));
-    THROW_IF_BACKEND_INSTANCE_ERROR(model_state_->ValidateConfigureModel());
-  }
+  // FIXME: Could make the locking more fine-grained. LoadModel likely
+  // benefits the most from concurrency. Several shared-states are
+  // accessed/modified in ReadModel, ConfigureOpenVinoCore, LoadModel, and
+  // CreateInferRequest
+  {
+    std::unique_lock<std::mutex> lk(model_mtx_);
 
-  if (model_state_->ModelNotLoaded(device_)) {
-    THROW_IF_BACKEND_INSTANCE_ERROR(model_state_->ParseParameters(device_));
-    // enable dynamic batching in the model
-    std::pair<std::string, ov::Any> property =
-        ov::hint::allow_auto_batching(false);
-    if ((model_state_->MaxBatchSize() != 0) &&
-        (!model_state_->SkipDynamicBatchSize())) {
-      property = ov::hint::allow_auto_batching(true);
+
+    if (model_state_->ModelNotRead()) {
+      std::string model_path;
+      THROW_IF_BACKEND_INSTANCE_ERROR(model_state_->ParseParameters());
+      THROW_IF_BACKEND_INSTANCE_ERROR(
+          model_state_->ReadModel(ArtifactFilename(), &model_path));
+      THROW_IF_BACKEND_INSTANCE_ERROR(model_state_->ValidateConfigureModel());
     }
-    THROW_IF_BACKEND_INSTANCE_ERROR(model_state_->ConfigureOpenvinoCore());
-    THROW_IF_BACKEND_INSTANCE_ERROR(model_state_->LoadModel(device_, property));
-  }
 
-  THROW_IF_BACKEND_INSTANCE_ERROR(
-      model_state_->CreateInferRequest(device_, &infer_request_));
+    if (model_state_->ModelNotLoaded(device_)) {
+      THROW_IF_BACKEND_INSTANCE_ERROR(model_state_->ParseParameters(device_));
+      // enable dynamic batching in the model
+      std::pair<std::string, ov::Any> property =
+          ov::hint::allow_auto_batching(false);
+      if ((model_state_->MaxBatchSize() != 0) &&
+          (!model_state_->SkipDynamicBatchSize())) {
+        property = ov::hint::allow_auto_batching(true);
+      }
+      THROW_IF_BACKEND_INSTANCE_ERROR(model_state_->ConfigureOpenvinoCore());
+      THROW_IF_BACKEND_INSTANCE_ERROR(
+          model_state_->LoadModel(device_, property));
+    }
+
+    THROW_IF_BACKEND_INSTANCE_ERROR(
+        model_state_->CreateInferRequest(device_, &infer_request_));
+  }
 }
 
 void
