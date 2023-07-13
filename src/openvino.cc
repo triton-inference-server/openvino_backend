@@ -67,6 +67,10 @@ struct BackendConfiguration {
 // of this class is created and associated with each
 // TRITONBACKEND_Model.
 //
+
+// Protect concurrent access of model state by instances
+static std::mutex model_mtx_;
+
 class ModelState : public BackendModel {
  public:
   static TRITONSERVER_Error* Create(
@@ -114,7 +118,7 @@ class ModelState : public BackendModel {
   bool ModelNotRead();
   // Whether or not a executable model is loaded on
   // the specified device.
-  bool ModelNotLoaded(const std::string device);
+  bool ModelNotLoaded(const std::string& device);
 
   bool SkipDynamicBatchSize() { return skip_dynamic_batchsize_; }
   bool EnableBatchPadding() { return enable_padding_; }
@@ -134,8 +138,6 @@ class ModelState : public BackendModel {
   ov::Core ov_core_;
   std::shared_ptr<ov::Model> ov_model_;
   std::map<std::string, ov::CompiledModel> compiled_model_;
-  // Protect concurrent access of model state by instances
-  std::mutex model_mtx_;
   // Maps device to their respective parameters
   std::map<std::string, std::vector<std::pair<std::string, ov::Any>>> config_;
   bool model_read_;
