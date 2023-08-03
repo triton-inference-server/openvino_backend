@@ -81,7 +81,7 @@ Configuration of OpenVINO for a model is done through the Parameters section of 
 * `INFERENCE_NUM_THREADS`: Maximum number of threads that can be used for inference tasks. Should be a non-negative number.
 * `COMPILATION_NUM_THREADS`: Maximum number of threads that can be used for compilation tasks. Should be a non-negative number.
 * `HINT_BF16`: Hint for device to use bfloat16 precision for inference. Possible value is `YES`.
-* `NUM_STREAMS`: The number of executor logical partitions. Set the value to `AUTO` to creates bare minimum of streams to improve the performance, or set the value to `NUMA` to creates as many streams as needed to accommodate NUMA and avoid associated penalties.
+* `NUM_STREAMS`: The number of executor logical partitions. Set the value to `AUTO` to creates bare minimum of streams to improve the performance, or set the value to `NUMA` to creates as many streams as needed to accommodate NUMA and avoid associated penalties. Set a numerical value to set explicit number of streams.
 * `SKIP_OV_DYNAMIC_BATCHSIZE`: The topology of some models do not support openVINO dynamic batch sizes. Set the value of this parameter to `YES`, in order
 to skip the dynamic batch sizes in backend.
 * `ENABLE_BATCH_PADDING`: By default an error will be generated if backend receives a request with batch size less than max_batch_size specified in the configuration. This error can be avoided at a cost of performance by specifying `ENABLE_BATCH_PADDING` parameter as `YES`.
