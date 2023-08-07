@@ -380,11 +380,11 @@ ModelState::ParseParameterHelper(
               .c_str());
     }
   } else if (mkey.compare("PERFORMANCE_HINT") == 0) {
-    if (value->compare("LATENCY") == 0) {
+    if (value->compare("latency") == 0) {
       *ov_property = ov::hint::performance_mode(ov::hint::PerformanceMode::LATENCY);
-    } else if (value->compare("THROUGHPUT") == 0) {
+    } else if (value->compare("throughput") == 0) {
       *ov_property = ov::hint::performance_mode(ov::hint::PerformanceMode::THROUGHPUT);
-    } else if (value->compare("CUMULATIVE_THROUGHPUT") == 0) {
+    } else if (value->compare("cumulative_throughput") == 0) {
       *ov_property = ov::hint::performance_mode(ov::hint::PerformanceMode::CUMULATIVE_THROUGHPUT);
     } else {
        return TRITONSERVER_ErrorNew(
