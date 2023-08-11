@@ -1191,7 +1191,8 @@ ModelInstanceState::Infer(
     std::vector<TRITONBACKEND_Response*>* responses,
     const uint32_t response_count)
 {
-  RETURN_IF_OPENVINO_ERROR(infer_request_.infer(), "running inference");
+  RETURN_IF_OPENVINO_ERROR(infer_request_.start_async(), "running inference");
+  infer_request_.wait();
 
   return nullptr;
 }
