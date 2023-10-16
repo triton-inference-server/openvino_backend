@@ -77,40 +77,19 @@ but the listed CMake argument can be used to override.
 
 Configuration of OpenVINO for a model is done through the Parameters section of the model's 'config.pbtxt' file. The parameters and their description are as follows.
 
+* `PERFORMANCE_HINT`: Presetting performance tunning options. Accepted values `LATENCY` for low concurrency use case and `THROUGHPUT` for high concurrency scenarios.
 * `CPU_EXTENSION_PATH`: Required for CPU custom layers. Absolute path to a shared library with the kernels implementations.
-* `INFERENCE_NUM_THREADS`: Maximum number of threads that can be used for inference tasks. Should be a non-negative number.
+* `INFERENCE_NUM_THREADS`: Maximum number of threads that can be used for inference tasks. Should be a non-negative number. Default is equal to number of cores.
 * `COMPILATION_NUM_THREADS`: Maximum number of threads that can be used for compilation tasks. Should be a non-negative number.
 * `HINT_BF16`: Hint for device to use bfloat16 precision for inference. Possible value is `YES`.
-* `NUM_STREAMS`: The number of executor logical partitions. Set the value to `AUTO` to creates bare minimum of streams to improve the performance, or set the value to `NUMA` to creates as many streams as needed to accommodate NUMA and avoid associated penalties.
+* `NUM_STREAMS`: The number of executor logical partitions. Set the value to `AUTO` to creates bare minimum of streams to improve the performance, or set the value to `NUMA` to creates as many streams as needed to accommodate NUMA and avoid associated penalties. Set a numerical value to set explicit number of streams.
 * `SKIP_OV_DYNAMIC_BATCHSIZE`: The topology of some models do not support openVINO dynamic batch sizes. Set the value of this parameter to `YES`, in order
 to skip the dynamic batch sizes in backend.
 * `ENABLE_BATCH_PADDING`: By default an error will be generated if backend receives a request with batch size less than max_batch_size specified in the configuration. This error can be avoided at a cost of performance by specifying `ENABLE_BATCH_PADDING` parameter as `YES`.
 * `RESHAPE_IO_LAYERS`: By setting this parameter as `YES`, the IO layers are reshaped to the dimensions provided in
 model configuration. By default, the dimensions in the model is used.
 
-The section of model config file specifying these parameters will look like:
 
-```
-.
-.
-.
-parameters: {
-key: "NUM_STREAMS"
-value: {
-string_value:"NUMA"
-}
-}
-parameters: {
-key: "INFERENCE_NUM_THREADS"
-value: {
-string_value:"5"
-}
-}
-.
-.
-.
-
-```
 
 ## Auto-Complete Model Configuration
 
@@ -157,10 +136,77 @@ and
 [`sequence_batching`](https://github.com/triton-inference-server/server/blob/main/docs/user_guide/model_configuration.md#sequence-batcher)
 is provided, then `dynamic_batching` will be enabled with default settings.
 
+
+### Examples of the "config.pbtxt" files depending on the use case
+
+Latency mode with low concurrency on the client side. Recommended for performance optimization with low number of parallel clients.
+```
+parameters: [
+{
+   key: "NUM_STREAMS"
+   value: {
+     string_value: "1"
+   }
+},
+{
+   key: "PERFORMANCE_HINT"
+   value: {
+     string_value: "LATENCY"
+   }
+}
+]
+```
+
+Throughput mode with high concurrency on the client side. Recommended for throughput optimization with high number of parallel clients.
+Number of streams should be lower or equal to number of parallel clients and lower of equal to the number of CPU cores.
+For example, with ~20 clients on the host with 12 CPU cores, the config could be like:
+```
+instance_group [
+    {
+      count: 12
+      kind: KIND_CPU
+    }
+  ]
+parameters: [
+{
+   key: "NUM_STREAMS"
+   value: {
+     string_value: "12"
+   }
+}
+]
+```
+
+When loading model with the non default format of Intermediate Representation and the name model.xml, use and extra parameter "default_model_filename".
+For example, using TensorFlow saved_model format use:
+```
+default_model_filename: "model.saved_model"
+parameters: [
+{
+   key: "PERFORMANCE_HINT"
+   value: {
+     string_value: "LATENCY"
+   }
+}
+]
+```
+and copy the model to the subfolder called "model.saved_model"
+```
+model_repository/
+└── model
+    ├── 1
+    │   └── model.saved_model
+    │       ├── saved_model.pb
+    │       └── variables
+    └── config.pbtxt
+
+```
+
+
 ## Known Issues
 
-* Not all models support dynamic batch sizes.
+* Models with dynamic shape are not supported in this backend now.
 
 * As of now, the Openvino backend does not support variable shaped tensors. However, the dynamic batch sizes in the model are supported. See `SKIP_OV_DYNAMIC_BATCHSIZE` and `ENABLE_BATCH_PADDING` parameters for more details.
 
-* Openvino does not support CPU execution for FP16.
+* Models with the scalar on the input (shape without any dimension are not supported)

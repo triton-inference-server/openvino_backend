@@ -265,6 +265,7 @@ ModelState::ParseParameters(const std::string& device)
           ParseParameter("COMPILATION_NUM_THREADS", params, &device_config));
       RETURN_IF_ERROR(ParseParameter("HINT_BF16", params, &device_config));
       RETURN_IF_ERROR(ParseParameter("NUM_STREAMS", params, &device_config));
+      RETURN_IF_ERROR(ParseParameter("PERFORMANCE_HINT", params, &device_config));
     }
   }
 
@@ -368,14 +369,32 @@ ModelState::ParseParameterHelper(
       *ov_property = ov::streams::num(ov::streams::AUTO);
     } else if (value->compare("numa") == 0) {
       *ov_property = ov::streams::num(ov::streams::NUMA);
-    } else {
+    } else if (IsNumber(*value)){
+      *ov_property = ov::streams::num(std::stoi(*value));
+    }
+    else{
       return TRITONSERVER_ErrorNew(
           TRITONSERVER_ERROR_INVALID_ARG,
           (std::string("expected the parameter '") + mkey +
-           "' to be either AUTO/NUMA, got " + *value)
+           "' to be either AUTO/NUMA/<int_value>, got " + *value)
               .c_str());
     }
-  } else {
+  } else if (mkey.compare("PERFORMANCE_HINT") == 0) {
+    if (value->compare("latency") == 0) {
+      *ov_property = ov::hint::performance_mode(ov::hint::PerformanceMode::LATENCY);
+    } else if (value->compare("throughput") == 0) {
+      *ov_property = ov::hint::performance_mode(ov::hint::PerformanceMode::THROUGHPUT);
+    } else if (value->compare("cumulative_throughput") == 0) {
+      *ov_property = ov::hint::performance_mode(ov::hint::PerformanceMode::CUMULATIVE_THROUGHPUT);
+    } else {
+       return TRITONSERVER_ErrorNew(
+          TRITONSERVER_ERROR_INVALID_ARG,
+          (std::string("expected the parameter '") + mkey +
+           "' to be LATENCY/THROUGHPUT/CUMULATIVE_THROUGHPUT, got " + *value)
+              .c_str());
+    }
+  }
+  else {
     return TRITONSERVER_ErrorNew(
         TRITONSERVER_ERROR_INVALID_ARG,
         (std::string("the parameter '") + mkey +
@@ -1172,7 +1191,8 @@ ModelInstanceState::Infer(
     std::vector<TRITONBACKEND_Response*>* responses,
     const uint32_t response_count)
 {
-  RETURN_IF_OPENVINO_ERROR(infer_request_.infer(), "running inference");
+  RETURN_IF_OPENVINO_ERROR(infer_request_.start_async(), "running inference");
+  infer_request_.wait();
 
   return nullptr;
 }
