@@ -28,6 +28,9 @@ cmake_minimum_required(VERSION 3.17)
 
 project(tritonopenvinobackend LANGUAGES C CXX)
 
+# Use C++17 standard as Triton's minimum required.
+set(TRITON_MIN_CXX_STANDARD 17 CACHE STRING "The minimum C++ standard which features are requested to build this target.")
+
 #
 # Set TRITON_BUILD_OPENVINO_VERSION to the version of OpenVINO that
 # you want to be built for the backend.
@@ -134,7 +137,7 @@ target_include_directories(
     ${TRITON_OPENVINO_INCLUDE_PATHS}
 )
 
-target_compile_features(triton-openvino-backend PRIVATE cxx_std_11)
+target_compile_features(triton-openvino-backend PRIVATE cxx_std_${TRITON_MIN_CXX_STANDARD})
 target_compile_options(
   triton-openvino-backend PRIVATE
   $<$<OR:$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:AppleClang>,$<CXX_COMPILER_ID:GNU>>:
