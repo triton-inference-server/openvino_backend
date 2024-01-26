@@ -60,6 +60,7 @@ Follow the steps below to build the backend shared library.
 $ mkdir build
 $ cd build
 $ cmake -DCMAKE_INSTALL_PREFIX:PATH=`pwd`/install -DTRITON_BUILD_OPENVINO_VERSION=2021.2.200 -DTRITON_BUILD_CONTAINER_VERSION=20.12 ..
+$ cd ..
 $ make install
 ```
 
@@ -136,6 +137,11 @@ and
 [`sequence_batching`](https://github.com/triton-inference-server/server/blob/main/docs/user_guide/model_configuration.md#sequence-batcher)
 is provided, then `dynamic_batching` will be enabled with default settings.
 
+It is recommended to use OpenVINO dynamic batch size instead.
+
+### Dynamic batch size and shapes
+
+In Triton OpenVINO backend only using `-1` as a dynamic dimension is supported. [Ranges](https://docs.openvino.ai/2023.3/ovms_docs_dynamic_shape_dynamic_model.html) are not supported.
 
 ### Examples of the "config.pbtxt" files depending on the use case
 
@@ -202,11 +208,51 @@ model_repository/
 
 ```
 
+Following configuration shows how to use OpenVINO dynamic shapes. `-1` denotes dimension acceptin any value on input.
+```
+name: "dummy_mul"
+backend: "openvino"
+instance_group [
+  {
+    count: 2
+    kind: KIND_CPU
+  }
+]
+input [
+  {
+    name: "input_b"
+    data_type: TYPE_FP32
+    dims: [ -1 , 10]
+  }
+]
+output [
+  {
+    name: "tf.math.multiply"
+    data_type: TYPE_FP32
+    dims: [ -1 , 10]
+  }
+]
+parameters: {
+key: "NUM_STREAMS"
+value: {
+string_value:"NUMA"
+}
+}
+parameters: {
+key: "INFERENCE_NUM_THREADS"
+value: {
+string_value:"5"
+}
+}
+parameters: {
+key: "RESHAPE_IO_LAYERS"
+value: {
+string_value:"yes"
+}
+}
+```
+
 
 ## Known Issues
-
-* Models with dynamic shape are not supported in this backend now.
-
-* As of now, the Openvino backend does not support variable shaped tensors. However, the dynamic batch sizes in the model are supported. See `SKIP_OV_DYNAMIC_BATCHSIZE` and `ENABLE_BATCH_PADDING` parameters for more details.
 
 * Models with the scalar on the input (shape without any dimension are not supported)

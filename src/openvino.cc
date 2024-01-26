@@ -552,23 +552,30 @@ ModelState::ValidateInputs(const size_t expected_input_cnt)
     }
 
     ov::Shape input_shape;
+    ov::PartialShape partial_input_shape;
     RETURN_IF_OPENVINO_ASSIGN_ERROR(
-        input_shape,
-        model_inputs[model_inputs_name_to_index[io_name]].get_shape(),
+        partial_input_shape,
+        model_inputs[model_inputs_name_to_index[io_name]].get_partial_shape(),
         ("retrieving original shapes from input " + io_name).c_str());
-
     if (reshape_io_layers_) {
       int index = (MaxBatchSize() != 0) ? 1 : 0;
       for (const auto dim : dims) {
-        input_shape[index++] = dim;
+        if (dim > 0) {
+            partial_input_shape[index++] = ov::Dimension(dim);
+        } else if (dim == -1) {
+            partial_input_shape[index++] = ov::Dimension::dynamic();
+        } else {
+                // TODO return error
+        }
       }
       RETURN_IF_OPENVINO_ERROR(
-          ppp.input(io_name).tensor().set_shape(input_shape),
+ //         ppp.input(io_name).tensor().set_shape(input_shape),
+          ppp.input(io_name).tensor().set_shape(partial_input_shape),
           std::string("setting shape for " + io_name).c_str());
     } else {
       RETURN_IF_ERROR(CompareDimsSupported(
           Name(), io_name,
-          std::vector<size_t>(input_shape.begin(), input_shape.end()), dims,
+          partial_input_shape, dims,
           MaxBatchSize(), false /* compare_exact */));
     }
 
@@ -643,14 +650,14 @@ ModelState::ValidateOutputs()
     } else {
       RETURN_IF_ERROR(ParseShape(io, "dims", &dims));
     }
-    ov::Shape output_shape;
+    ov::PartialShape output_shape;
     RETURN_IF_OPENVINO_ASSIGN_ERROR(
         output_shape,
-        model_outputs[model_outputs_name_to_index[io_name]].get_shape(),
+        model_outputs[model_outputs_name_to_index[io_name]].get_partial_shape(),
         ("retrieving original shapes from output " + io_name).c_str());
     RETURN_IF_ERROR(CompareDimsSupported(
         Name(), io_name,
-        std::vector<size_t>(output_shape.begin(), output_shape.end()), dims,
+        output_shape, dims,
         MaxBatchSize(), true /* compare_exact */));
   }
 
@@ -810,9 +817,9 @@ ModelState::AutoCompleteInputOrOutput(
           "data_type",
           OpenVINOElementToModelConfigDataType(ov_io.get_element_type())));
       // Find shape
-      ov::Shape io_shape;
+      ov::PartialShape io_shape;
       RETURN_IF_OPENVINO_ASSIGN_ERROR(
-          io_shape, ov_io.get_shape(),
+          io_shape, ov_io.get_partial_shape(),
           ("retrieving original shapes from" + std::string(io_json_obj_name) +
            " " + io_name)
               .c_str());
@@ -820,7 +827,7 @@ ModelState::AutoCompleteInputOrOutput(
       triton::common::TritonJson::Value dims(
           ModelConfig(), triton::common::TritonJson::ValueType::ARRAY);
       for (size_t i = (MaxBatchSize() > 0) ? 1 : 0; i < io_shape.size(); i++) {
-        RETURN_IF_ERROR(dims.AppendInt(io_shape[i]));
+        RETURN_IF_ERROR(dims.AppendInt(io_shape.is_static() ? io_shape[i].get_length() : -1));
       }
       RETURN_IF_ERROR(io_json.Add("dims", std::move(dims)));
       // Add individual input/output to new input/output
@@ -840,7 +847,6 @@ ModelState::AutoCompleteInputOrOutput(
          "': " + io_json_obj_name + " already specified")
             .c_str());
   }
-
   return nullptr;  // success
 }
 
@@ -929,7 +935,7 @@ ModelInstanceState::ModelInstanceState(
     throw triton::backend::BackendModelInstanceException(TRITONSERVER_ErrorNew(
         TRITONSERVER_ERROR_INVALID_ARG,
         (std::string("unable to load model '") + model_state_->Name() +
-         "', openVINO backend supports only CPU device")
+         "', Triton openVINO backend supports only CPU device")
             .c_str()));
   }
 
@@ -1332,7 +1338,7 @@ ModelInstanceState::ReadOutputTensors(
 TRITONSERVER_Error*
 ModelInstanceState::ValidateOutputBatchSize(std::vector<int64_t>* output_shape)
 {
-  auto mbs = model_state_->MaxBatchSize();
+  auto mbs = model_state_->MaxBatchSize(); //TODO @atobisze
   if (mbs == 0) {
     return nullptr;
   } else if (
@@ -1361,7 +1367,6 @@ TRITONBACKEND_Initialize(TRITONBACKEND_Backend* backend)
   const char* cname;
   RETURN_IF_ERROR(TRITONBACKEND_BackendName(backend, &cname));
   std::string name(cname);
-
   LOG_MESSAGE(
       TRITONSERVER_LOG_INFO,
       (std::string("TRITONBACKEND_Initialize: ") + name).c_str());
