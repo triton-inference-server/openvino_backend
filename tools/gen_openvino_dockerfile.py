@@ -73,6 +73,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Build instructions:
 # https://github.com/openvinotoolkit/openvino/wiki/BuildingForLinux
 
+# The linux part is building from source, while the windows part is using
+# pre-build archive.
+# TODO: Unify build steps between linux and windows.
+
 ARG OPENVINO_VERSION
 ARG OPENVINO_BUILD_TYPE
 WORKDIR /workspace
@@ -123,8 +127,12 @@ def dockerfile_for_windows(output_file):
     df += """
 SHELL ["cmd", "/S", "/C"]
 
-# instructions:
+# Install instructions:
 # https://docs.openvino.ai/2023.3/openvino_docs_install_guides_installing_openvino_from_archive_windows.html
+
+# The windows part is using pre-build archive, while the linux part is building
+# from source.
+# TODO: Unify build steps between windows and linux.
 
 ARG OPENVINO_VERSION
 ARG OPENVINO_BUILD_TYPE
