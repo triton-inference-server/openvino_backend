@@ -73,6 +73,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Build instructions:
 # https://github.com/openvinotoolkit/openvino/wiki/BuildingForLinux
 
+# The linux part is building from source, while the windows part is using
+# pre-build archive.
+# TODO: Unify build steps between linux and windows.
+
 ARG OPENVINO_VERSION
 ARG OPENVINO_BUILD_TYPE
 WORKDIR /workspace
@@ -123,37 +127,23 @@ def dockerfile_for_windows(output_file):
     df += """
 SHELL ["cmd", "/S", "/C"]
 
-# Build instructions:
-# https://github.com/openvinotoolkit/openvino/wiki/BuildingForWindows
+# Install instructions:
+# https://docs.openvino.ai/2023.3/openvino_docs_install_guides_installing_openvino_from_archive_windows.html
+
+# The windows part is using pre-build archive, while the linux part is building
+# from source.
+# TODO: Unify build steps between windows and linux.
 
 ARG OPENVINO_VERSION
 ARG OPENVINO_BUILD_TYPE
+
 WORKDIR /workspace
-
-# When git cloning it is important that we include '-b' and branchname
-# so that this command is re-run when the branch changes, otherwise it
-# will be cached by docker and continue using an old clone/branch. We
-# are relying on the use of a release branch that does not change once
-# it is released (if a patch is needed for that release we expect
-# there to be a new version).
-RUN git clone -b %OPENVINO_VERSION% https://github.com/openvinotoolkit/openvino.git
-
-WORKDIR /workspace/openvino
-RUN git submodule update --init --recursive
-
-WORKDIR /workspace/openvino/build
-ARG VS_DEVCMD_BAT="call \BuildTools\VC\Auxiliary\Build\vcvars64.bat"
-ARG CMAKE_BAT="cmake \
-          -DCMAKE_BUILD_TYPE=%OPENVINO_BUILD_TYPE% \
-          -DCMAKE_INSTALL_PREFIX=C:/workspace/install \
-          -DENABLE_TESTS=OFF \
-          .."
-ARG CMAKE_BUILD_BAT="cmake --build . --config %OPENVINO_BUILD_TYPE% --target install --verbose -j8"
-RUN powershell Set-Content 'build.bat' -value '%VS_DEVCMD_BAT%','%CMAKE_BAT%','%CMAKE_BUILD_BAT%'
-RUN build.bat
+RUN curl -L https://storage.openvinotoolkit.org/repositories/openvino/packages/2023.3/windows/w_openvino_toolkit_windows_2023.3.0.13775.ceeafaf64f3_x86_64.zip --output ov.zip
+RUN tar -xf ov.zip
+RUN ren w_openvino_toolkit_windows_2023.3.0.13775.ceeafaf64f3_x86_64 install
 
 WORKDIR /opt/openvino
-RUN xcopy /I /E \\workspace\\openvino\\licensing LICENSE.openvino
+RUN xcopy /I /E \\workspace\\install\\docs\\licensing LICENSE.openvino
 RUN mkdir include
 RUN xcopy /I /E \\workspace\\install\\runtime\\include\\ie include
 RUN xcopy /I /E \\workspace\\install\\runtime\\include\\ngraph include\\ngraph
