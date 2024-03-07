@@ -78,7 +78,7 @@ but the listed CMake argument can be used to override.
 
 Configuration of OpenVINO for a model is done through the Parameters section of the model's 'config.pbtxt' file. The parameters and their description are as follows.
 
-* `PERFORMANCE_HINT`: Presetting performance tunning options. Accepted values `LATENCY` for low concurrency use case and `THROUGHPUT` for high concurrency scenarios.
+* `PERFORMANCE_HINT`: Presetting performance tuning options. Accepted values `LATENCY` for low concurrency use case and `THROUGHPUT` for high concurrency scenarios.
 * `CPU_EXTENSION_PATH`: Required for CPU custom layers. Absolute path to a shared library with the kernels implementations.
 * `INFERENCE_NUM_THREADS`: Maximum number of threads that can be used for inference tasks. Should be a non-negative number. Default is equal to number of cores.
 * `COMPILATION_NUM_THREADS`: Maximum number of threads that can be used for compilation tasks. Should be a non-negative number.
