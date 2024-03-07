@@ -137,7 +137,6 @@ and
 [`sequence_batching`](https://github.com/triton-inference-server/server/blob/main/docs/user_guide/model_configuration.md#sequence-batcher)
 is provided, then `dynamic_batching` will be enabled with default settings.
 
-It is recommended to use OpenVINO dynamic batch size instead.
 
 ## Examples of the "config.pbtxt" file sections depending on the use case
 
@@ -202,13 +201,13 @@ model_repository/
     └── config.pbtxt
 
 ```
-
-### Reshaping model to support dynamic batch size or dimension
+Other allowed values are `model.pdmodel` or `model.onnx`.
+### Reshaping models
 
 Following section shows how to use OpenVINO dynamic shapes. `-1` denotes dimension accepting any value on input. In this case
 while model originally accepted input with layout `NCHW` and shape `(1,3,224,224)`, now it accepts any batch size and height.
 
-*Note*: If model is originally exported with dynamic shapes support there is no need to manually specify dynamic shapes in config.
+*Note*: If the model is originally exported with dynamic shapes, there is no need to manually specify dynamic shapes in config.
 
 ```
 input [
@@ -236,4 +235,4 @@ string_value:"yes"
 ## Known Issues
 
 * Models with the scalar on the input (shape without any dimension are not supported)
-* Reshaping using dimension [ranges](https://docs.openvino.ai/2023.3/ovms_docs_dynamic_shape_dynamic_model.html) is not supported.
+* Reshaping using [dimension ranges](https://docs.openvino.ai/2023.3/ovms_docs_dynamic_shape_dynamic_model.html) is not supported.
