@@ -195,8 +195,9 @@ OpenVINOElementToModelConfigDataType(const ov::element::Type& data_type)
   return "TYPE_INVALID";
 }
 
-static bool doesMatch(const ov::Dimension& ov_dim, int64_t config_dim) {
-  if(ov_dim.is_static()) {
+static bool
+doesMatch(const ov::Dimension& ov_dim, int64_t config_dim) {
+  if (ov_dim.is_static()) {
     return ov_dim.get_length() == config_dim;
   }
   if (!ov_dim.get_interval().has_upper_bound()) {

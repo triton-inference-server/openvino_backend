@@ -565,7 +565,10 @@ ModelState::ValidateInputs(const size_t expected_input_cnt)
         } else if (dim == -1) {
           partial_input_shape[index++] = ov::Dimension::dynamic();
         } else {
-          return TRITONSERVER_ErrorNew(TRITONSERVER_ERROR_INTERNAL, std::string("openvino backend does dimensions values other than -1 or positive integers"));
+          return TRITONSERVER_ErrorNew(
+              TRITONSERVER_ERROR_INTERNAL,
+              std::string("openvino backend does dimensions values other than "
+                          "-1 or positive integers"));
         }
       }
       RETURN_IF_OPENVINO_ERROR(
@@ -573,8 +576,7 @@ ModelState::ValidateInputs(const size_t expected_input_cnt)
           std::string("setting shape for " + io_name).c_str());
     } else {
       RETURN_IF_ERROR(CompareDimsSupported(
-          Name(), io_name,
-          partial_input_shape, dims, MaxBatchSize(),
+          Name(), io_name, partial_input_shape, dims, MaxBatchSize(),
           false /* compare_exact */));
     }
 
@@ -655,8 +657,7 @@ ModelState::ValidateOutputs()
         model_outputs[model_outputs_name_to_index[io_name]].get_partial_shape(),
         ("retrieving original shapes from output " + io_name).c_str());
     RETURN_IF_ERROR(CompareDimsSupported(
-        Name(), io_name,
-        output_shape, dims, MaxBatchSize(),
+        Name(), io_name, output_shape, dims, MaxBatchSize(),
         true /* compare_exact */));
   }
 
