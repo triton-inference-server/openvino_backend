@@ -196,13 +196,14 @@ OpenVINOElementToModelConfigDataType(const ov::element::Type& data_type)
 }
 
 static bool doesMatch(const ov::Dimension& ov_dim, int64_t config_dim) {
-    if(ov_dim.is_static()) {
-        return ov_dim.get_length() == config_dim;
-    }
-    if (!ov_dim.get_interval().has_upper_bound()) {
-        return true;
-    }
-    return (config_dim < ov_dim.get_max_length()) && (config_dim > ov_dim.get_min_length());
+  if(ov_dim.is_static()) {
+    return ov_dim.get_length() == config_dim;
+  }
+  if (!ov_dim.get_interval().has_upper_bound()) {
+    return true;
+  }
+  return (config_dim < ov_dim.get_max_length()) &&
+         (config_dim > ov_dim.get_min_length());
 }
 
 TRITONSERVER_Error*
@@ -289,7 +290,7 @@ ConvertToSignedShape(const ov::PartialShape& shape)
 {
   std::vector<int64_t> out;
   for (const auto& dim : shape) {
-      out.emplace_back(dim.is_static() ? dim.get_length() : -1);
+    out.emplace_back(dim.is_static() ? dim.get_length() : -1);
   }
   return out;
 }

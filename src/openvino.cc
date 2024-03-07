@@ -561,22 +561,21 @@ ModelState::ValidateInputs(const size_t expected_input_cnt)
       int index = (MaxBatchSize() != 0) ? 1 : 0;
       for (const auto dim : dims) {
         if (dim > 0) {
-            partial_input_shape[index++] = ov::Dimension(dim);
+          partial_input_shape[index++] = ov::Dimension(dim);
         } else if (dim == -1) {
-            partial_input_shape[index++] = ov::Dimension::dynamic();
+          partial_input_shape[index++] = ov::Dimension::dynamic();
         } else {
-                // TODO return error
+          return TRITONSERVER_ErrorNew(TRITONSERVER_ERROR_INTERNAL, std::string("openvino backend does dimensions values other than -1 or positive integers"));
         }
       }
       RETURN_IF_OPENVINO_ERROR(
- //         ppp.input(io_name).tensor().set_shape(input_shape),
           ppp.input(io_name).tensor().set_shape(partial_input_shape),
           std::string("setting shape for " + io_name).c_str());
     } else {
       RETURN_IF_ERROR(CompareDimsSupported(
           Name(), io_name,
-          partial_input_shape, dims,
-          MaxBatchSize(), false /* compare_exact */));
+          partial_input_shape, dims, MaxBatchSize(),
+          false /* compare_exact */));
     }
 
     if (MaxBatchSize()) {
@@ -657,8 +656,8 @@ ModelState::ValidateOutputs()
         ("retrieving original shapes from output " + io_name).c_str());
     RETURN_IF_ERROR(CompareDimsSupported(
         Name(), io_name,
-        output_shape, dims,
-        MaxBatchSize(), true /* compare_exact */));
+        output_shape, dims, MaxBatchSize(),
+        true /* compare_exact */));
   }
 
   // Model preprocessing
@@ -827,7 +826,8 @@ ModelState::AutoCompleteInputOrOutput(
       triton::common::TritonJson::Value dims(
           ModelConfig(), triton::common::TritonJson::ValueType::ARRAY);
       for (size_t i = (MaxBatchSize() > 0) ? 1 : 0; i < io_shape.size(); i++) {
-        RETURN_IF_ERROR(dims.AppendInt(io_shape.is_static() ? io_shape[i].get_length() : -1));
+        RETURN_IF_ERROR(dims.AppendInt(
+            io_shape.is_static() ? io_shape[i].get_length() : -1));
       }
       RETURN_IF_ERROR(io_json.Add("dims", std::move(dims)));
       // Add individual input/output to new input/output
@@ -1338,7 +1338,7 @@ ModelInstanceState::ReadOutputTensors(
 TRITONSERVER_Error*
 ModelInstanceState::ValidateOutputBatchSize(std::vector<int64_t>* output_shape)
 {
-  auto mbs = model_state_->MaxBatchSize(); //TODO @atobisze
+  auto mbs = model_state_->MaxBatchSize();
   if (mbs == 0) {
     return nullptr;
   } else if (
