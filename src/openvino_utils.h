@@ -92,13 +92,13 @@ std::string OpenVINOElementToModelConfigDataType(
 
 TRITONSERVER_Error* CompareDimsSupported(
     const std::string& model_name, const std::string& tensor_name,
-    const std::vector<size_t>& model_shape, const std::vector<int64_t>& dims,
+    const ov::PartialShape& model_shape, const std::vector<int64_t>& dims,
     const int max_batch_size, const bool compare_exact);
 
 TRITONSERVER_Error* ReadParameter(
     triton::common::TritonJson::Value& params, const std::string& key,
     std::string* param);
 
-std::vector<int64_t> ConvertToSignedShape(const std::vector<size_t> shape);
+std::vector<int64_t> ConvertToSignedShape(const ov::PartialShape& shape);
 
 }}}  // namespace triton::backend::openvino

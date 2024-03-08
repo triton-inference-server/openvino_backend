@@ -137,7 +137,9 @@ and
 is provided, then `dynamic_batching` will be enabled with default settings.
 
 
-### Examples of the "config.pbtxt" files depending on the use case
+## Examples of the "config.pbtxt" file sections depending on the use case
+
+### Latency mode
 
 Latency mode with low concurrency on the client side. Recommended for performance optimization with low number of parallel clients.
 ```
@@ -156,6 +158,8 @@ parameters: [
 }
 ]
 ```
+
+### Throughput mode
 
 Throughput mode with high concurrency on the client side. Recommended for throughput optimization with high number of parallel clients.
 Number of streams should be lower or equal to number of parallel clients and lower of equal to the number of CPU cores.
@@ -177,19 +181,14 @@ parameters: [
 ]
 ```
 
+### Loading non default model format
+
 When loading model with the non default format of Intermediate Representation and the name model.xml, use and extra parameter "default_model_filename".
 For example, using TensorFlow saved_model format use:
 ```
 default_model_filename: "model.saved_model"
-parameters: [
-{
-   key: "PERFORMANCE_HINT"
-   value: {
-     string_value: "LATENCY"
-   }
-}
-]
 ```
+
 and copy the model to the subfolder called "model.saved_model"
 ```
 model_repository/
@@ -201,12 +200,38 @@ model_repository/
     └── config.pbtxt
 
 ```
+Other allowed values are `model.pdmodel` or `model.onnx`.
+### Reshaping models
 
+Following section shows how to use OpenVINO dynamic shapes. `-1` denotes dimension accepting any value on input. In this case
+while model originally accepted input with layout `NCHW` and shape `(1,3,224,224)`, now it accepts any batch size and resolution.
+
+*Note*: If the model is originally exported with dynamic shapes, there is no need to manually specify dynamic shapes in config.
+
+```
+input [
+  {
+    name: "input"
+    data_type: TYPE_FP32
+    dims: [ -1, 3, -1, -1]
+  }
+]
+output [
+  {
+    name: "output"
+    data_type: TYPE_FP32
+    dims: [ -1, 1001]
+  }
+]
+parameters: {
+key: "RESHAPE_IO_LAYERS"
+value: {
+string_value:"yes"
+}
+}
+```
 
 ## Known Issues
 
-* Models with dynamic shape are not supported in this backend now.
-
-* As of now, the Openvino backend does not support variable shaped tensors. However, the dynamic batch sizes in the model are supported. See `SKIP_OV_DYNAMIC_BATCHSIZE` and `ENABLE_BATCH_PADDING` parameters for more details.
-
 * Models with the scalar on the input (shape without any dimension are not supported)
+* Reshaping using [dimension ranges](https://docs.openvino.ai/2023.3/ovms_docs_dynamic_shape_dynamic_model.html) is not supported.
