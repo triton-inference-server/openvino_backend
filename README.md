@@ -60,7 +60,6 @@ Follow the steps below to build the backend shared library.
 $ mkdir build
 $ cd build
 $ cmake -DCMAKE_INSTALL_PREFIX:PATH=`pwd`/install -DTRITON_BUILD_OPENVINO_VERSION=2021.2.200 -DTRITON_BUILD_CONTAINER_VERSION=20.12 ..
-$ cd ..
 $ make install
 ```
 
@@ -206,7 +205,7 @@ model_repository/
 ### Reshaping model to support dynamic batch size or dimension
 
 Following section shows how to use OpenVINO dynamic shapes. `-1` denotes dimension accepting any value on input. In this case
-while model originally accepted input with layout `NCHW` and shape `(1,3,224,224)`, now it accepts any batch size and height.
+while model originally accepted input with layout `NCHW` and shape `(1,3,224,224)`, now it accepts any batch size and resolution.
 
 *Note*: If model is originally exported with dynamic shapes support there is no need to manually specify dynamic shapes in config.
 
@@ -215,7 +214,7 @@ input [
   {
     name: "input"
     data_type: TYPE_FP32
-    dims: [ -1, 3, -1, 224]
+    dims: [ -1, 3, -1, -1]
   }
 ]
 output [
