@@ -569,8 +569,8 @@ ModelState::ValidateInputs(const size_t expected_input_cnt)
         } else {
           return TRITONSERVER_ErrorNew(
               TRITONSERVER_ERROR_INTERNAL,
-              std::string("openvino backend does dimensions values other than "
-                          "-1 or positive integers"));
+              "openvino backend does not support dimensions values"
+              " other than `-1` or positive integers");
         }
       }
       RETURN_IF_OPENVINO_ERROR(
