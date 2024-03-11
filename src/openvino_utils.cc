@@ -195,24 +195,25 @@ OpenVINOElementToModelConfigDataType(const ov::element::Type& data_type)
   return "TYPE_INVALID";
 }
 
+static bool
+doesMatch(const ov::Dimension& ov_dim, int64_t config_dim)
+{
+  if (ov_dim.is_static()) {
+    return ov_dim.get_length() == config_dim;
+  }
+  if (!ov_dim.get_interval().has_upper_bound()) {
+    return true;
+  }
+  return (config_dim < ov_dim.get_max_length()) &&
+         (config_dim > ov_dim.get_min_length());
+}
+
 TRITONSERVER_Error*
 CompareDimsSupported(
     const std::string& model_name, const std::string& tensor_name,
-    const std::vector<size_t>& model_shape, const std::vector<int64_t>& dims,
+    const ov::PartialShape& model_shape, const std::vector<int64_t>& dims,
     const int max_batch_size, const bool compare_exact)
 {
-  // TODO: OpenVINO backend does not support the dynamic shapes as of now.
-  // We can use RESIZE_BILINEAR preProcess in InputInfo to support dynamic
-  // shapes in future.
-  for (const auto& dim : dims) {
-    RETURN_ERROR_IF_TRUE(
-        (dim == -1), TRITONSERVER_ERROR_INVALID_ARG,
-        std::string("model '") + model_name + "', tensor '" + tensor_name +
-            "': provides -1 dim (shape " + ShapeToString(dims) +
-            "), openvino "
-            "currently does not support dynamic shapes.");
-  }
-
   // If the model configuration expects batching support in the model,
   // then the openvino first dimension will be reshaped hence should not
   // be compared.
@@ -232,9 +233,8 @@ CompareDimsSupported(
     bool succ = (model_shape.size() == (size_t)full_dims.size());
     if (succ) {
       for (size_t i = 0; i < full_dims.size(); ++i) {
-        const int64_t model_dim = model_shape[i];
-        if (compare_exact || (i != 0)) {
-          succ &= (model_dim == full_dims[i]);
+        if (compare_exact || ((i != 0) && (full_dims[i] != -1))) {
+          succ &= doesMatch(model_shape[i], full_dims[i]);
         }
       }
     }
@@ -256,8 +256,7 @@ CompareDimsSupported(
     bool succ = (model_shape.size() == dims.size());
     if (succ) {
       for (size_t i = 0; i < dims.size(); ++i) {
-        const int64_t model_dim = model_shape[i];
-        succ &= (model_dim == dims[i]);
+        succ &= doesMatch(model_shape[i], dims[i]);
       }
     }
 
@@ -289,9 +288,13 @@ ReadParameter(
 }
 
 std::vector<int64_t>
-ConvertToSignedShape(const std::vector<size_t> shape)
+ConvertToSignedShape(const ov::PartialShape& shape)
 {
-  return std::vector<int64_t>{shape.begin(), shape.end()};
+  std::vector<int64_t> out;
+  for (const auto& dim : shape) {
+    out.emplace_back(dim.is_static() ? dim.get_length() : -1);
+  }
+  return out;
 }
 
 }}}  // namespace triton::backend::openvino
