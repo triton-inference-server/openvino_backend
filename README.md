@@ -240,7 +240,7 @@ string_value:"yes"
 ```
 ### Running the models on Intel GPU
 
-Build the custom triton image with the required runtime drivers using the script from .
+Build the custom triton image with the required runtime drivers using the script from [build.py](https://github.com/dtrawins/server/blob/igpu/build.py).
 
 ```
 python3 build.py --target-platform linux --enable-logging --enable-stats --enable-metrics --enable-cpu-metrics --endpoint grpc --endpoint http --filesystem s3
