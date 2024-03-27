@@ -243,7 +243,7 @@ string_value:"yes"
 Build the custom triton image with the required runtime drivers using the script from .
 
 ```
-python3 build.py --target-platform linux --enable-logging --enable-stats --enable-metrics --enable-cpu-metrics
+python3 build.py --target-platform linux --enable-logging --enable-stats --enable-metrics --enable-cpu-metrics --endpoint grpc --endpoint http --filesystem s3
 ```
 Add to your config.pbtxt a parameter `TARGET_DEVICE`:
 ```
