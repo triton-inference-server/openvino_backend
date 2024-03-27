@@ -84,6 +84,9 @@ class ModelState : public BackendModel {
   TRITONSERVER_Error* ParseParameter(
       const std::string& mkey, triton::common::TritonJson::Value& params,
       std::vector<std::pair<std::string, ov::Any>>* device_config);
+  TRITONSERVER_Error* ParseStringParameter(
+      const std::string& mkey, triton::common::TritonJson::Value& params,
+      std::string* value);
   TRITONSERVER_Error* ParseParameterHelper(
       const std::string& mkey, std::string* value,
       std::pair<std::string, ov::Any>* ov_property);
@@ -118,6 +121,7 @@ class ModelState : public BackendModel {
 
   bool SkipDynamicBatchSize() { return skip_dynamic_batchsize_; }
   bool EnableBatchPadding() { return enable_padding_; }
+  std::string TargetDevice() {return target_device_;}
 
  private:
   ModelState(TRITONBACKEND_Model* triton_model);
@@ -140,6 +144,7 @@ class ModelState : public BackendModel {
   bool skip_dynamic_batchsize_;
   bool enable_padding_;
   bool reshape_io_layers_;
+  std::string target_device_;
 };
 
 TRITONSERVER_Error*
@@ -179,7 +184,7 @@ ModelState::Create(TRITONBACKEND_Model* triton_model, ModelState** state)
 ModelState::ModelState(TRITONBACKEND_Model* triton_model)
     : BackendModel(triton_model), model_read_(false),
       skip_dynamic_batchsize_(false), enable_padding_(false),
-      reshape_io_layers_(false)
+      reshape_io_layers_(false), target_device_("CPU")
 {
 }
 
@@ -238,12 +243,10 @@ ModelState::ParseParameters()
   bool status = model_config_.Find("parameters", &params);
   if (status) {
     RETURN_IF_ERROR(LoadCpuExtensions(params));
-    RETURN_IF_ERROR(ParseBoolParameter(
-        "SKIP_OV_DYNAMIC_BATCHSIZE", params, &skip_dynamic_batchsize_));
-    RETURN_IF_ERROR(
-        ParseBoolParameter("ENABLE_BATCH_PADDING", params, &enable_padding_));
-    RETURN_IF_ERROR(
-        ParseBoolParameter("RESHAPE_IO_LAYERS", params, &reshape_io_layers_));
+    ParseBoolParameter("SKIP_OV_DYNAMIC_BATCHSIZE", params, &skip_dynamic_batchsize_);
+    ParseBoolParameter("ENABLE_BATCH_PADDING", params, &enable_padding_);
+    ParseBoolParameter("RESHAPE_IO_LAYERS", params, &reshape_io_layers_);
+    ParseStringParameter("TARGET_DEVICE", params, &target_device_);
   }
 
   return nullptr;
@@ -256,18 +259,13 @@ ModelState::ParseParameters(const std::string& device)
   triton::common::TritonJson::Value params;
   bool status = model_config_.Find("parameters", &params);
   if (status) {
-    if (device == "CPU") {
-      config_[device] = {};
-      auto& device_config = config_.at(device);
-      RETURN_IF_ERROR(
-          ParseParameter("INFERENCE_NUM_THREADS", params, &device_config));
-      RETURN_IF_ERROR(
-          ParseParameter("COMPILATION_NUM_THREADS", params, &device_config));
-      RETURN_IF_ERROR(ParseParameter("HINT_BF16", params, &device_config));
-      RETURN_IF_ERROR(ParseParameter("NUM_STREAMS", params, &device_config));
-      RETURN_IF_ERROR(
-          ParseParameter("PERFORMANCE_HINT", params, &device_config));
-    }
+    config_[device] = {};
+    auto& device_config = config_.at(device);
+    ParseParameter("INFERENCE_NUM_THREADS", params, &device_config);
+    ParseParameter("COMPILATION_NUM_THREADS", params, &device_config);
+    ParseParameter("HINT_BF16", params, &device_config);
+    ParseParameter("NUM_STREAMS", params, &device_config);
+    ParseParameter("PERFORMANCE_HINT", params, &device_config);
   }
 
   return nullptr;
@@ -277,9 +275,7 @@ TRITONSERVER_Error*
 ModelState::LoadCpuExtensions(triton::common::TritonJson::Value& params)
 {
   std::string cpu_ext_path;
-  LOG_IF_ERROR(
-      ReadParameter(params, "CPU_EXTENSION_PATH", &(cpu_ext_path)),
-      "error when reading parameters");
+  ReadParameter(params, "CPU_EXTENSION_PATH", &(cpu_ext_path));
   if (!cpu_ext_path.empty()) {
     // CPU (MKLDNN) extensions is loaded as a shared library and passed as a
     // pointer to base extension
@@ -301,8 +297,8 @@ ModelState::ParseBoolParameter(
     bool* setting)
 {
   std::string value;
-  LOG_IF_ERROR(
-      ReadParameter(params, mkey, &(value)), "error when reading parameters");
+  RETURN_IF_ERROR(
+      ReadParameter(params, mkey, &(value)));
   std::transform(
       value.begin(), value.end(), value.begin(),
       [](unsigned char c) { return std::tolower(c); });
@@ -314,13 +310,31 @@ ModelState::ParseBoolParameter(
 }
 
 TRITONSERVER_Error*
+ModelState::ParseStringParameter(
+    const std::string& mkey, triton::common::TritonJson::Value& params,
+    std::string* setting)
+{
+  std::string value;
+  RETURN_IF_ERROR(
+      ReadParameter(params, mkey, &(value)));
+  std::transform(
+      value.begin(), value.end(), value.begin(),
+      [](unsigned char c) { return std::toupper(c); });
+  if (value.length() > 0) {
+    *setting = value;
+  }
+
+  return nullptr;
+}
+
+TRITONSERVER_Error*
 ModelState::ParseParameter(
     const std::string& mkey, triton::common::TritonJson::Value& params,
     std::vector<std::pair<std::string, ov::Any>>* device_config)
 {
   std::string value;
-  LOG_IF_ERROR(
-      ReadParameter(params, mkey, &(value)), "error when reading parameters");
+  RETURN_IF_ERROR(
+      ReadParameter(params, mkey, &(value)));
   if (!value.empty()) {
     std::pair<std::string, ov::Any> ov_property;
     RETURN_IF_ERROR(ParseParameterHelper(mkey, &value, &ov_property));
@@ -410,6 +424,16 @@ ModelState::ParseParameterHelper(
 TRITONSERVER_Error*
 ModelState::ConfigureOpenvinoCore()
 {
+  auto availableDevices = ov_core_.get_available_devices();
+  std::stringstream list_of_devices;
+
+  for (auto & element : availableDevices) {
+    list_of_devices << element << ",";  
+  }
+  LOG_MESSAGE(
+      TRITONSERVER_LOG_VERBOSE,
+      (std::string("Available OpenVINO devices: " + list_of_devices.str()))
+          .c_str());
   for (auto&& item : config_) {
     std::string device_name = item.first;
     std::vector<std::pair<std::string, ov::Any>> properties = item.second;
@@ -438,9 +462,10 @@ ModelState::LoadModel(
                                  std::to_string(OPENVINO_VERSION_MINOR) + "." +
                                  std::to_string(OPENVINO_VERSION_PATCH))
                                     .c_str());
+
   LOG_MESSAGE(
       TRITONSERVER_LOG_VERBOSE,
-      (std::string("Device info: \n") +
+      (std::string("Device info: ") +
        ConvertVersionMapToString(ov_core_.get_versions(device)))
           .c_str());
 
@@ -932,19 +957,26 @@ ModelInstanceState::Create(
 ModelInstanceState::ModelInstanceState(
     ModelState* model_state, TRITONBACKEND_ModelInstance* triton_model_instance)
     : BackendModelInstance(model_state, triton_model_instance),
-      model_state_(model_state), device_("CPU"), batch_pad_size_(0)
+      model_state_(model_state), device_(model_state->TargetDevice()), batch_pad_size_(0)
 {
-  if (Kind() != TRITONSERVER_INSTANCEGROUPKIND_CPU) {
+  if ((Kind() != TRITONSERVER_INSTANCEGROUPKIND_CPU) && (Kind() != TRITONSERVER_INSTANCEGROUPKIND_AUTO)) {
     throw triton::backend::BackendModelInstanceException(TRITONSERVER_ErrorNew(
         TRITONSERVER_ERROR_INVALID_ARG,
         (std::string("unable to load model '") + model_state_->Name() +
-         "', Triton openVINO backend supports only CPU device")
+         "', Triton OpenVINO backend supports only Kind CPU and AUTO")
             .c_str()));
   }
 
   if (model_state_->ModelNotRead()) {
     std::string model_path;
     THROW_IF_BACKEND_INSTANCE_ERROR(model_state_->ParseParameters());
+    device_ = model_state->TargetDevice();
+    LOG_MESSAGE(
+      TRITONSERVER_LOG_INFO,
+      (std::string("Target device " + device_))
+          .c_str());
+    
+
     THROW_IF_BACKEND_INSTANCE_ERROR(
         model_state_->ReadModel(ArtifactFilename(), &model_path));
     THROW_IF_BACKEND_INSTANCE_ERROR(model_state_->ValidateConfigureModel());
@@ -1518,8 +1550,7 @@ TRITONBACKEND_ModelInstanceInitialize(TRITONBACKEND_ModelInstance* instance)
   LOG_MESSAGE(
       TRITONSERVER_LOG_INFO,
       (std::string("TRITONBACKEND_ModelInstanceInitialize: ") + name + " (" +
-       TRITONSERVER_InstanceGroupKindString(kind) + " device " +
-       std::to_string(device_id) + ")")
+       TRITONSERVER_InstanceGroupKindString(kind)+")")
           .c_str());
 
   // Get the model state associated with this instance's model.
@@ -1607,7 +1638,7 @@ TRITONBACKEND_GetBackendAttribute(
       TRITONSERVER_LOG_VERBOSE,
       "TRITONBACKEND_GetBackendAttribute: setting attributes");
   RETURN_IF_ERROR(TRITONBACKEND_BackendAttributeAddPreferredInstanceGroup(
-      backend_attributes, TRITONSERVER_INSTANCEGROUPKIND_CPU, 0, nullptr, 0));
+      backend_attributes, TRITONSERVER_INSTANCEGROUPKIND_AUTO, 0, nullptr, 0));
 
   return nullptr;
 }
