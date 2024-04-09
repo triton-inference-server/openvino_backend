@@ -121,7 +121,7 @@ class ModelState : public BackendModel {
 
   bool SkipDynamicBatchSize() { return skip_dynamic_batchsize_; }
   bool EnableBatchPadding() { return enable_padding_; }
-  std::string TargetDevice() {return target_device_;}
+  std::string TargetDevice() { return target_device_; }
 
  private:
   ModelState(TRITONBACKEND_Model* triton_model);
@@ -243,7 +243,8 @@ ModelState::ParseParameters()
   bool status = model_config_.Find("parameters", &params);
   if (status) {
     RETURN_IF_ERROR(LoadCpuExtensions(params));
-    ParseBoolParameter("SKIP_OV_DYNAMIC_BATCHSIZE", params, &skip_dynamic_batchsize_);
+    ParseBoolParameter(
+        "SKIP_OV_DYNAMIC_BATCHSIZE", params, &skip_dynamic_batchsize_);
     ParseBoolParameter("ENABLE_BATCH_PADDING", params, &enable_padding_);
     ParseBoolParameter("RESHAPE_IO_LAYERS", params, &reshape_io_layers_);
     ParseStringParameter("TARGET_DEVICE", params, &target_device_);
@@ -297,8 +298,7 @@ ModelState::ParseBoolParameter(
     bool* setting)
 {
   std::string value;
-  RETURN_IF_ERROR(
-      ReadParameter(params, mkey, &(value)));
+  RETURN_IF_ERROR(ReadParameter(params, mkey, &(value)));
   std::transform(
       value.begin(), value.end(), value.begin(),
       [](unsigned char c) { return std::tolower(c); });
@@ -315,8 +315,7 @@ ModelState::ParseStringParameter(
     std::string* setting)
 {
   std::string value;
-  RETURN_IF_ERROR(
-      ReadParameter(params, mkey, &(value)));
+  RETURN_IF_ERROR(ReadParameter(params, mkey, &(value)));
   std::transform(
       value.begin(), value.end(), value.begin(),
       [](unsigned char c) { return std::toupper(c); });
@@ -333,8 +332,7 @@ ModelState::ParseParameter(
     std::vector<std::pair<std::string, ov::Any>>* device_config)
 {
   std::string value;
-  RETURN_IF_ERROR(
-      ReadParameter(params, mkey, &(value)));
+  RETURN_IF_ERROR(ReadParameter(params, mkey, &(value)));
   if (!value.empty()) {
     std::pair<std::string, ov::Any> ov_property;
     RETURN_IF_ERROR(ParseParameterHelper(mkey, &value, &ov_property));
@@ -427,8 +425,8 @@ ModelState::ConfigureOpenvinoCore()
   auto availableDevices = ov_core_.get_available_devices();
   std::stringstream list_of_devices;
 
-  for (auto & element : availableDevices) {
-    list_of_devices << element << ",";  
+  for (auto& element : availableDevices) {
+    list_of_devices << element << ",";
   }
   LOG_MESSAGE(
       TRITONSERVER_LOG_VERBOSE,
@@ -957,9 +955,11 @@ ModelInstanceState::Create(
 ModelInstanceState::ModelInstanceState(
     ModelState* model_state, TRITONBACKEND_ModelInstance* triton_model_instance)
     : BackendModelInstance(model_state, triton_model_instance),
-      model_state_(model_state), device_(model_state->TargetDevice()), batch_pad_size_(0)
+      model_state_(model_state), device_(model_state->TargetDevice()),
+      batch_pad_size_(0)
 {
-  if ((Kind() != TRITONSERVER_INSTANCEGROUPKIND_CPU) && (Kind() != TRITONSERVER_INSTANCEGROUPKIND_AUTO)) {
+  if ((Kind() != TRITONSERVER_INSTANCEGROUPKIND_CPU) &&
+      (Kind() != TRITONSERVER_INSTANCEGROUPKIND_AUTO)) {
     throw triton::backend::BackendModelInstanceException(TRITONSERVER_ErrorNew(
         TRITONSERVER_ERROR_INVALID_ARG,
         (std::string("unable to load model '") + model_state_->Name() +
@@ -972,10 +972,9 @@ ModelInstanceState::ModelInstanceState(
     THROW_IF_BACKEND_INSTANCE_ERROR(model_state_->ParseParameters());
     device_ = model_state->TargetDevice();
     LOG_MESSAGE(
-      TRITONSERVER_LOG_INFO,
-      (std::string("Target device " + device_))
-          .c_str());
-    
+        TRITONSERVER_LOG_INFO,
+        (std::string("Target device " + device_)).c_str());
+
 
     THROW_IF_BACKEND_INSTANCE_ERROR(
         model_state_->ReadModel(ArtifactFilename(), &model_path));
@@ -1550,7 +1549,7 @@ TRITONBACKEND_ModelInstanceInitialize(TRITONBACKEND_ModelInstance* instance)
   LOG_MESSAGE(
       TRITONSERVER_LOG_INFO,
       (std::string("TRITONBACKEND_ModelInstanceInitialize: ") + name + " (" +
-       TRITONSERVER_InstanceGroupKindString(kind)+")")
+       TRITONSERVER_InstanceGroupKindString(kind) + ")")
           .c_str());
 
   // Get the model state associated with this instance's model.

@@ -62,6 +62,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends \
         cmake \
         libglib2.0-dev \
+        libtbb-dev \
         patchelf \
         git \
         make \
@@ -103,10 +104,11 @@ RUN /bin/bash -c 'cmake \
 WORKDIR /opt/openvino
 RUN cp -r /workspace/openvino/licensing LICENSE.openvino
 RUN mkdir -p include && \
-    cp -r /workspace/install/runtime/include/*  include/.
+    cp -r /workspace/install/runtime/include/ngraph include/. && \
+    cp -r /workspace/install/runtime/include/openvino include/.
 RUN mkdir -p lib && \
-    cp -P /workspace/install/runtime/lib/intel64/*.so* lib/. && \
-    cp -P /workspace/install/runtime/3rdparty/tbb/lib/libtbb.so* lib/.
+    cp -P /usr/lib/x86_64-linux-gnu/libtbb.so* lib/. && \
+    cp -P /workspace/install/runtime/lib/intel64/libopenvino*.so* lib/. \
 """
 
     df += """

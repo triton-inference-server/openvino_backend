@@ -59,7 +59,7 @@ Follow the steps below to build the backend shared library.
 ```
 $ mkdir build
 $ cd build
-$ cmake -DCMAKE_INSTALL_PREFIX:PATH=`pwd`/install -DTRITON_BUILD_OPENVINO_VERSION=2024.0.0 -DTRITON_BUILD_CONTAINER_VERSION=24.02 ..
+$ cmake -DCMAKE_INSTALL_PREFIX:PATH=`pwd`/install -DTRITON_BUILD_OPENVINO_VERSION=2021.2.200 -DTRITON_BUILD_CONTAINER_VERSION=20.12 ..
 $ make install
 ```
 
@@ -72,8 +72,11 @@ but the listed CMake argument can be used to override.
 * triton-inference-server/common: -DTRITON_COMMON_REPO_TAG=[tag]
 
 ## Build a complete image with OpenVINO backend including Intel GPU drivers
+
+Build the custom triton image with the required runtime drivers using the script from [build.py](https://github.com/dtrawins/server/blob/igpu/build.py).
+
 ```
-python3 build.py --target-platform linux --enable-logging --enable-stats --enable-metrics --enable-cpu-metrics \
+python3 build.py --target-platform linux --enable-logging --enable-stats --enable-metrics --enable-cpu-metrics --endpoint grpc --endpoint http --filesystem s3 \
 --backend openvino:pull/74/head --enable-intel-gpu
 ```
 
@@ -240,11 +243,6 @@ string_value:"yes"
 ```
 ### Running the models on Intel GPU
 
-Build the custom triton image with the required runtime drivers using the script from [build.py](https://github.com/dtrawins/server/blob/igpu/build.py).
-
-```
-python3 build.py --target-platform linux --enable-logging --enable-stats --enable-metrics --enable-cpu-metrics --endpoint grpc --endpoint http --filesystem s3
-```
 Add to your config.pbtxt a parameter `TARGET_DEVICE`:
 ```
 parameters: [
