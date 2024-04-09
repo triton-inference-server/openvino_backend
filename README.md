@@ -269,7 +269,7 @@ parameters: [
 
 Start the container with extra parameter to pass the device `/dev/dri`:
 ```
-docker run -it --rm --device /dev/dri --group-add=$(stat -c "%g" /dev/dri/render* )  tritonserver:latest 
+docker run -it --rm --device /dev/dri --group-add=$(stat -c "%g" /dev/dri/render* )  tritonserver:latest
 ```
 
 ## Known Issues
