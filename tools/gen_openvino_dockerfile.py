@@ -62,7 +62,6 @@ ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends \
         cmake \
         libglib2.0-dev \
-        libtbb-dev \
         patchelf \
         git \
         make \
@@ -104,11 +103,10 @@ RUN /bin/bash -c 'cmake \
 WORKDIR /opt/openvino
 RUN cp -r /workspace/openvino/licensing LICENSE.openvino
 RUN mkdir -p include && \
-    cp -r /workspace/install/runtime/include/ngraph include/. && \
-    cp -r /workspace/install/runtime/include/openvino include/.
+    cp -r /workspace/install/runtime/include/* include/.
 RUN mkdir -p lib && \
-    cp -P /usr/lib/x86_64-linux-gnu/libtbb.so* lib/. && \
-    cp -P /workspace/install/runtime/lib/intel64/libopenvino*.so* lib/. \
+    cp -P /workspace/install/runtime/lib/intel64/*.so* lib/. && \
+    cp -P /workspace/install/runtime/3rdparty/tbb/lib/libtbb.so* lib/. \
 """
 
     df += """
@@ -128,7 +126,7 @@ def dockerfile_for_windows(output_file):
 SHELL ["cmd", "/S", "/C"]
 
 # Install instructions:
-# https://docs.openvino.ai/2023.3/openvino_docs_install_guides_installing_openvino_from_archive_windows.html
+# https://docs.openvino.ai/2024/get-started/install-openvino/install-openvino-archive-windows.html
 
 # The windows part is using pre-build archive, while the linux part is building
 # from source.
@@ -138,16 +136,15 @@ ARG OPENVINO_VERSION
 ARG OPENVINO_BUILD_TYPE
 
 WORKDIR /workspace
-RUN curl -L https://storage.openvinotoolkit.org/repositories/openvino/packages/2023.3/windows/w_openvino_toolkit_windows_2023.3.0.13775.ceeafaf64f3_x86_64.zip --output ov.zip
+RUN curl -L https://storage.openvinotoolkit.org/repositories/openvino/packages/2024.0/windows/w_openvino_toolkit_windows_2024.0.0.14509.34caeefd078_x86_64.zip --output ov.zip
 RUN tar -xf ov.zip
-RUN ren w_openvino_toolkit_windows_2023.3.0.13775.ceeafaf64f3_x86_64 install
+RUN ren w_openvino_toolkit_windows_2024.0.0.14509.34caeefd078_x86_64 install
 
 WORKDIR /opt/openvino
 RUN xcopy /I /E \\workspace\\install\\docs\\licensing LICENSE.openvino
 RUN mkdir include
 RUN xcopy /I /E \\workspace\\install\\runtime\\include\\ie include
-RUN xcopy /I /E \\workspace\\install\\runtime\\include\\ngraph include\\ngraph
-RUN xcopy /I /E \\workspace\\install\\runtime\\include\\openvino include\\openvino
+RUN xcopy /I /E \\workspace\\install\\runtime\\include\\* include\
 RUN xcopy /I /E \\workspace\\install\\runtime\\bin\\intel64\\%OPENVINO_BUILD_TYPE% bin
 RUN xcopy /I /E \\workspace\\install\\runtime\\lib\\intel64\\%OPENVINO_BUILD_TYPE% lib
 RUN copy \\workspace\\install\\runtime\\3rdparty\\tbb\\bin\\tbb12.dll bin\\tbb12.dll
