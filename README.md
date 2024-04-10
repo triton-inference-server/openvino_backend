@@ -208,7 +208,7 @@ while model originally accepted input with layout `NCHW` and shape `(1,3,224,224
 
 *Note*: If the model is originally exported with dynamic shapes, there is no need to manually specify dynamic shapes in config.
 
-*Note*: Some models might not support shape with arbitrary dimention size. An error will be raised during the model initialization when the shaped in the config.pbtxt is not possible. The client will also receive an error if the request includes unsupported input shape.
+*Note*: Some models might not support a shape with an arbitrary dimension size. An error will be raised during the model initialization when the shaped in the config.pbtxt is not possible. Clients will also receive an error if the request includes unsupported input shapes.
 ```
 input [
   {
