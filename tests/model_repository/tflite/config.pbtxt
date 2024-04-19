@@ -1,0 +1,16 @@
+backend: "openvino"
+parameters: [
+{
+   key: "NUM_STREAMS"
+   value: {
+     string_value: "1"
+   }
+},
+{
+   key: "PERFORMANCE_HINT"
+   value: {
+     string_value: "LATENCY"
+   }
+}
+]
+default_model_filename: "model.tflite"
