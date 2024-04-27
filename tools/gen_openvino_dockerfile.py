@@ -143,7 +143,6 @@ RUN ren w_openvino_toolkit_windows_2024.0.0.14509.34caeefd078_x86_64 install
 WORKDIR /opt/openvino
 RUN xcopy /I /E \\workspace\\install\\docs\\licensing LICENSE.openvino
 RUN mkdir include
-RUN xcopy /I /E \\workspace\\install\\runtime\\include\\ie include
 RUN xcopy /I /E \\workspace\\install\\runtime\\include\\* include\
 RUN xcopy /I /E \\workspace\\install\\runtime\\bin\\intel64\\%OPENVINO_BUILD_TYPE% bin
 RUN xcopy /I /E \\workspace\\install\\runtime\\lib\\intel64\\%OPENVINO_BUILD_TYPE% lib
