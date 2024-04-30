@@ -1,5 +1,6 @@
 import numpy as np
 import grpc
+import os
 import tritonclient.grpc as grpcclient
 from tritonclient.grpc import service_pb2_grpc
 
@@ -17,4 +18,4 @@ def prepare_grpc_stub(port):
 def prepare_triton_client(port):
     return grpcclient.InferenceServerClient(
         url=f"localhost:{port}",
-        verbose=False)
+        verbose=os.environ.get("LOG_LEVEL")=="DEBUG")
