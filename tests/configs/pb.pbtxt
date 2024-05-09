@@ -13,4 +13,18 @@ parameters: [
    }
 }
 ]
-default_model_filename: "saved_model.pb"
+input [
+  {
+    name: "input_1"
+    data_type: TYPE_FP32
+    dims: [-1, 224, 224, 3 ]
+  }
+]
+output [
+  {
+    name: "activation_49"
+    data_type: TYPE_FP32
+    dims: [-1, 1001]
+  }
+]
+default_model_filename: "model.saved_model"

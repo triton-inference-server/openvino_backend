@@ -18,10 +18,11 @@ def triton_server(model_repository):
     except socket.error as e:
         if e.errno != errno.EADDRINUSE:
             raise Exception("Not expected exception found in port manager {}: {}".format(self.name, e))
-    subprocess.run(f"docker run -p {port}:8001 -d -v {model_repository}:/model_repository --name={CONTAINER_NAME} --device /dev/dri --group-add=$(stat -c \"%g\" /dev/dri/render* ) tritonserver:latest bin/tritonserver --model-repository /model_repository", capture_output=True, shell=True)
+    image_name = os.environ.get("TIS_IMAGE_NAME")
+    image_name = image_name if image_name != None else "tritonserver:latest"
+    subprocess.run(f"docker run -p {port}:8001 -d -v {model_repository}:/model_repository --name={CONTAINER_NAME} --device /dev/dri --group-add=$(stat -c \"%g\" /dev/dri/render* ) {image_name} bin/tritonserver --model-repository /model_repository", capture_output=True, shell=True)
     subprocess.run(["sleep", "3"])
-    if os.environ.get("LOG_LEVEL") == "DEBUG":
-        subprocess.run(["docker", "logs", CONTAINER_NAME])
+    subprocess.run(["docker", "logs", CONTAINER_NAME])
     yield port
     subprocess.run(["docker", "stop", CONTAINER_NAME])
     subprocess.run(["docker", "remove", CONTAINER_NAME])
@@ -64,13 +65,12 @@ def paddle_model(repo):
     copy_config(repo, "paddle")
 
 def pb_model(repo):
-    os.makedirs(f"{repo}/pb/1")
+    os.makedirs(f"{repo}/pb/1/model.saved_model")
     subprocess.run(f"curl -L -o {repo}/pb/1/model.tar.gz https://www.kaggle.com/api/v1/models/tensorflow/resnet-50/tensorFlow2/classification/1/download", shell=True)
-    subprocess.run(f"tar xzf {repo}/pb/1/model.tar.gz -C {repo}/pb/1", shell=True)
+    subprocess.run(f"tar xzf {repo}/pb/1/model.tar.gz -C {repo}/pb/1/model.saved_model", shell=True)
     copy_config(repo, "pb")
 
 def setup_model(cache, repo, name, gpu=False):
-    #os.makedirs(f"{repo}/{name}")
     shutil.copytree(f"{cache}/{name}", f"{repo}/{name}") 
     copy_config(repo, name, gpu)
 
@@ -84,7 +84,7 @@ def model_cache():
     onnx_model(cache)
     dynamic_model(cache)
     paddle_model(cache)
-    #pb_model(cache)
+    pb_model(cache)
     yield cache
 
     dir.cleanup()
@@ -100,6 +100,7 @@ def model_repository(model_cache, request):
     setup_model(model_cache, repo, "onnx", request.param == "gpu")
     setup_model(model_cache, repo, "dynamic") # [GPU] PriorBoxClustered op is not supported in GPU plugin yet.
     setup_model(model_cache, repo, "paddle", request.param == "gpu")
+    setup_model(model_cache, repo, "pb")
 
     yield repo
 

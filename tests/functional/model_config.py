@@ -23,6 +23,12 @@ MODEL_CONFIG = {
             "output_name": "save_infer_model/scale_0.tmp_1",
             "expected_shape": [(1,1000)]
             },
+        "pb": {
+            "shape": [(1, 224, 224, 3)],
+            "input_name": "input_1",
+            "output_name": "activation_49",
+            "expected_shape": [(1,1001)]
+            },
         "dynamic": {
             "shape": [
                 (1, 3, 224, 224),
