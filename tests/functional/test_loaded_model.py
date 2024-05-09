@@ -1,11 +1,11 @@
 import pytest
 
 from tritonclient.grpc import service_pb2
-from model_config import MODEL_CONFIG
+from model_config import MODEL_CONFIG, models
 import common
 
 
-@pytest.mark.parametrize("model", MODEL_CONFIG.keys())
+@pytest.mark.parametrize("model", models)
 class TestLoadedModel:
     def test_inference(self, model, triton_server):
         triton_client = common.prepare_triton_client(triton_server)
@@ -13,7 +13,7 @@ class TestLoadedModel:
         config = MODEL_CONFIG[model]
 
         for shape in config["shape"]:
-            inputs = common.prepare_inputs(config["input_name"], shape)
+            inputs = common.prepare_inputs(config["input_name"], shape, config["dtype"])
             results = triton_client.infer(
                 model_name=model,
                 inputs=inputs)
