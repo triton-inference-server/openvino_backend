@@ -71,6 +71,16 @@ but the listed CMake argument can be used to override.
 * triton-inference-server/core: -DTRITON_CORE_REPO_TAG=[tag]
 * triton-inference-server/common: -DTRITON_COMMON_REPO_TAG=[tag]
 
+## Build a complete image with OpenVINO backend including Intel GPU drivers
+
+Build the custom triton image with the required runtime drivers using the script from [build.py](https://github.com/dtrawins/server/blob/igpu/build.py).
+
+```
+python3 build.py --target-platform linux --enable-logging --enable-stats --enable-metrics --enable-cpu-metrics --endpoint grpc --endpoint http --filesystem s3 \
+--backend openvino:pull/74/head --enable-intel-gpu
+```
+
+
 ## Using the OpenVINO Backend
 
 ### Parameters
@@ -88,6 +98,7 @@ to skip the dynamic batch sizes in backend.
 * `ENABLE_BATCH_PADDING`: By default an error will be generated if backend receives a request with batch size less than max_batch_size specified in the configuration. This error can be avoided at a cost of performance by specifying `ENABLE_BATCH_PADDING` parameter as `YES`.
 * `RESHAPE_IO_LAYERS`: By setting this parameter as `YES`, the IO layers are reshaped to the dimensions provided in
 model configuration. By default, the dimensions in the model is used.
+* `TARGET_DEVICE`: Choose the OpenVINO device for running the inference. It could be CPU (default), GPU or any of the virtual devices like AUTO, MULTI, HETERO. Note: using Intel GPU is possible only if `--device /dev/dri` is passed to the container and is supported only on linux with x86_64 arch.
 
 
 
@@ -230,6 +241,36 @@ value: {
 string_value:"yes"
 }
 }
+```
+### Running the models on Intel GPU
+
+Add to your config.pbtxt a parameter `TARGET_DEVICE`:
+```
+parameters: [
+{
+   key: "NUM_STREAMS"
+   value: {
+     string_value: "1"
+   }
+},
+{
+   key: "PERFORMANCE_HINT"
+   value: {
+     string_value: "THROUGHPUT"
+   }
+},
+{
+   key: "TARGET_DEVICE"
+   value: {
+     string_value: "GPU"
+   }
+}
+]
+```
+
+Start the container with extra parameter to pass the device `/dev/dri`:
+```
+docker run -it --rm --device /dev/dri --group-add=$(stat -c "%g" /dev/dri/render* )  tritonserver:latest
 ```
 
 ## Known Issues
