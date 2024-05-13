@@ -33,7 +33,7 @@ def paddle_model(name, repo):
     subprocess.run(f"mv {repo}/{name}/1/MobileNetV3_large_x1_0_infer/inference.pdmodel {repo}/{name}/1/model.pdmodel", shell=True)
     subprocess.run(f"mv {repo}/{name}/1/MobileNetV3_large_x1_0_infer/inference.pdiparams {repo}/{name}/1/model.pdiparams", shell=True)
 
-def pb_model(name, repo):
+def saved_model(name, repo):
     os.makedirs(f"{repo}/{name}/1/model.saved_model")
     subprocess.run(f"curl -L -o {repo}/{name}/1/model.tar.gz https://www.kaggle.com/api/v1/models/tensorflow/resnet-50/tensorFlow2/classification/1/download", shell=True)
     subprocess.run(f"tar xzf {repo}/{name}/1/model.tar.gz -C {repo}/{name}/1/model.saved_model", shell=True)

@@ -45,9 +45,9 @@ MODEL_CONFIG = {
             "dtype": np.float32,
             "expected_shape": [(1,1000)]
             },
-        "pb": {
+        "saved_model": {
             "enable": True,
-            "fetch": pb_model,
+            "fetch": saved_model,
             "shape": [(1, 224, 224, 3)],
             "configurations": [CPU],
             "input_name": "input_1",
