@@ -64,9 +64,7 @@ def model_repository(model_cache, request):
     repo = dir.name
 
     for model in models:
-        gpu = False
-        if GPU in MODEL_CONFIG[model]["configurations"] and request.param == GPU:
-            gpu = True
+        gpu = GPU in MODEL_CONFIG[model]["configurations"] and request.param == GPU
         setup_model(model_cache, repo, model, gpu)
 
     yield repo
