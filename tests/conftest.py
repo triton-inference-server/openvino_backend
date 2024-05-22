@@ -4,6 +4,10 @@ import sys
 
 import pytest
 
+def pytest_addoption(parser):
+    parser.addoption("--gpu", action="store_true")
+    parser.addoption("--skip-download", action="store_true")
+    parser.addoption("--model-cache", action="store")
 
 def pytest_configure(config):
     config.addinivalue_line(
@@ -12,23 +16,8 @@ def pytest_configure(config):
     )
 
 
-def pytest_runtest_setup(item):
-    for mark in item.iter_markers():
-        if "gpu" in mark.name:
-            if sys.platform.startswith("linux"):
-                process = subprocess.run(
-                    ["/bin/bash", "-c", 'lspci | grep -E "VGA|3D"'],
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.STDOUT,
-                    shell=False,
-                )
-                if process.returncode != 0:
-                    pytest.skip("Test requires Intel GPU device on the host machine")
-            elif sys.platform.startswith("win") and "win" not in item.config.getoption(
-                "--image_os"
-            ):
-                wsl = shutil.which("wsl")
-                if not wsl:
-                    pytest.skip(
-                        "Test requires Intel GPU device and configured WSL2 on the host machine"
-                    )
+def pytest_collection_modifyitems(config, items):
+    for item in items:
+        if "gpu" in item.keywords:
+            if not config.getoption("--gpu"):
+                item.add_marker(pytest.mark.skip("Test requires --gpu flag to be set and Intel GPU device on the host machine"))

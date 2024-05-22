@@ -10,9 +10,8 @@ from model_config import CPU, GPU, MODEL_CONFIG, models
 
 CONTAINER_NAME = "openvino_backend_pytest"
 
-
 @pytest.fixture(scope="class")
-def triton_server(model_repository):
+def triton_server(model_repository, request):
     port = 0
     try:
         sock = socket.socket()
@@ -24,8 +23,9 @@ def triton_server(model_repository):
             raise Exception(f"Not expected exception found in port manager: {e.errno}")
     image_name = os.environ.get("TIS_IMAGE_NAME")
     image_name = image_name if image_name is not None else "tritonserver:latest"
+    gpu = '--device /dev/dri --group-add=$(stat -c "%g" /dev/dri/render* )' if request.config.getoption("--gpu") else ""
     subprocess.run(
-        f'docker run -p {port}:8001 -d -v {model_repository}:/model_repository --name={CONTAINER_NAME} --device /dev/dri --group-add=$(stat -c "%g" /dev/dri/render* ) {image_name} bin/tritonserver --model-repository /model_repository',
+        f'docker run -p {port}:8001 -d -v {model_repository}:/model_repository --name={CONTAINER_NAME} {gpu}  {image_name} bin/tritonserver --model-repository /model_repository',
         capture_output=True,
         shell=True,
     )
@@ -47,14 +47,21 @@ def setup_model(cache, repo, name, gpu=False):
 
 
 @pytest.fixture(scope="session")
-def model_cache():
-    dir = tempfile.TemporaryDirectory()
-    cache = dir.name
-    for model in models:
-        MODEL_CONFIG[model]["fetch"](model, cache)
+def model_cache(request):
+    input_dir = request.config.getoption('--model-cache')
+    dir = None
+    if input_dir == "":
+        dir = tempfile.TemporaryDirectory()
+        cache = dir.name
+    else:
+        cache = input_dir
+    if not request.config.getoption("--skip-download"):
+        for model in models:
+            MODEL_CONFIG[model]["fetch"](model, cache)
     yield cache
 
-    dir.cleanup()
+    if dir is not None:
+        dir.cleanup()
 
 
 @pytest.fixture(scope="class", params=[CPU, pytest.param(GPU, marks=pytest.mark.gpu)])
