@@ -6,8 +6,8 @@ import pytest
 
 def pytest_addoption(parser):
     parser.addoption("--gpu", action="store_true")
-    parser.addoption("--skip-download", action="store_true")
     parser.addoption("--model-cache", action="store")
+    parser.addoption("--image", action="store")
 
 def pytest_configure(config):
     config.addinivalue_line(

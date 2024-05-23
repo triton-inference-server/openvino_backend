@@ -2,7 +2,7 @@
 
 Installing and running tests
 ```bash
-pip install -r requirements
+pip install -r requirements.txt
 pytest
 ```
 
@@ -11,12 +11,8 @@ Running tests with gpu
 pytest --gpu
 ```
 
-Run tests without re-downloading models
+Run tests while caching downloaded models
 ```bash
 pytest --model-cache ./cache
 ```
 
-All subsequent runs could be made using
-```bash
-pytest --model-cache ./cache --skip-download
-```

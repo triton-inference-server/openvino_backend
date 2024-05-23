@@ -21,7 +21,7 @@ def triton_server(model_repository, request):
     except socket.error as e:
         if e.errno != errno.EADDRINUSE:
             raise Exception(f"Not expected exception found in port manager: {e.errno}")
-    image_name = os.environ.get("TIS_IMAGE_NAME")
+    image_name = request.config.getoption("--image")
     image_name = image_name if image_name is not None else "tritonserver:latest"
     gpu = '--device /dev/dri --group-add=$(stat -c "%g" /dev/dri/render* )' if request.config.getoption("--gpu") else ""
     subprocess.run(
@@ -55,7 +55,7 @@ def model_cache(request):
         cache = dir.name
     else:
         cache = input_dir
-    if not request.config.getoption("--skip-download"):
+    if os.listdir(cache) == []:
         for model in models:
             MODEL_CONFIG[model]["fetch"](model, cache)
     yield cache
