@@ -33,7 +33,7 @@ def triton_server(model_repository, request):
     subprocess.run(["docker", "logs", CONTAINER_NAME])
     yield port
     subprocess.run(["docker", "stop", CONTAINER_NAME])
-    subprocess.run(["docker", "remove", CONTAINER_NAME])
+    subprocess.run(f"docker container rm {CONTAINER_NAME}", shell=True)
 
 
 def copy_config(repo, name, gpu=False):
@@ -50,7 +50,7 @@ def setup_model(cache, repo, name, gpu=False):
 def model_cache(request):
     input_dir = request.config.getoption('--model-cache')
     dir = None
-    if input_dir == "":
+    if input_dir is None:
         dir = tempfile.TemporaryDirectory()
         cache = dir.name
     else:
