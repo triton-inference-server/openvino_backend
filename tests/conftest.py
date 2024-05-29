@@ -4,6 +4,7 @@ import sys
 
 import pytest
 
+
 def pytest_addoption(parser):
     parser.addoption("--gpu", action="store_true")
     parser.addoption("--model-cache", action="store")
