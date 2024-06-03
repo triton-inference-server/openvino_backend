@@ -1,0 +1,30 @@
+backend: "openvino"
+parameters: [
+{
+   key: "NUM_STREAMS"
+   value: {
+     string_value: "1"
+   }
+},
+{
+   key: "PERFORMANCE_HINT"
+   value: {
+     string_value: "LATENCY"
+   }
+}
+]
+input [
+  {
+    name: "input_1"
+    data_type: TYPE_FP32
+    dims: [-1, 224, 224, 3 ]
+  }
+]
+output [
+  {
+    name: "activation_49"
+    data_type: TYPE_FP32
+    dims: [-1, 1001]
+  }
+]
+default_model_filename: "model.saved_model"

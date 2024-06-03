@@ -1,0 +1,14 @@
+parameters: [
+{
+   key: "NUM_STREAMS"
+   value: {
+     string_value: "1"
+   }
+},
+{
+   key: "PERFORMANCE_HINT"
+   value: {
+     string_value: "LATENCY"
+   }
+}
+]
