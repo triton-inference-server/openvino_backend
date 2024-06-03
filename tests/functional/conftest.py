@@ -58,7 +58,7 @@ def triton_server(model_repository, request):
             pass
     subprocess.run(["docker", "logs", container_name])
     yield port
-    print(f"Stoping container {container_name}")
+    print(f"Stopping container {container_name}")
     subprocess.run(["docker", "stop", container_name])
     print(f"Cleaning up {container_name}")
     subprocess.run(
