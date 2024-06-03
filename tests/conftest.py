@@ -10,6 +10,7 @@ def pytest_addoption(parser):
     parser.addoption("--model-cache", action="store")
     parser.addoption("--image", action="store")
 
+
 def pytest_configure(config):
     config.addinivalue_line(
         "markers",
@@ -21,4 +22,8 @@ def pytest_collection_modifyitems(config, items):
     for item in items:
         if "gpu" in item.keywords:
             if not config.getoption("--gpu"):
-                item.add_marker(pytest.mark.skip("Test requires --gpu flag to be set and Intel GPU device on the host machine"))
+                item.add_marker(
+                    pytest.mark.skip(
+                        "Test requires --gpu flag to be set and Intel GPU device on the host machine"
+                    )
+                )
