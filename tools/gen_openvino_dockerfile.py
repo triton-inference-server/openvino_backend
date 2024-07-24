@@ -77,6 +77,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # pre-build archive.
 # TODO: Unify build steps between linux and windows.
 
+# Get intel GPU drivers
+WORKDIR /drv
+RUN curl -L -O https://github.com/intel/intel-graphics-compiler/releases/download/igc-1.0.15468.11/intel-igc-core_1.0.15468.11_amd64.deb ; \
+    curl -L -O https://github.com/intel/intel-graphics-compiler/releases/download/igc-1.0.15468.11/intel-igc-opencl_1.0.15468.11_amd64.deb ; \
+    curl -L -O https://github.com/intel/compute-runtime/releases/download/23.43.27642.18/intel-opencl-icd_23.43.27642.18_amd64.deb ; \
+    curl -L -O https://github.com/intel/compute-runtime/releases/download/23.43.27642.18/libigdgmm12_22.3.11_amd64.deb ; \
+    apt-get download ocl-icd-libopencl1 ; \
+    find . -iname '*.deb' -exec  dpkg-deb -X {} . \;
+
 ARG OPENVINO_VERSION
 ARG OPENVINO_BUILD_TYPE
 WORKDIR /workspace
@@ -104,11 +113,11 @@ RUN /bin/bash -c 'cmake \
 WORKDIR /opt/openvino
 RUN cp -r /workspace/openvino/licensing LICENSE.openvino
 RUN mkdir -p include && \
-    cp -r /workspace/install/runtime/include/ngraph include/. && \
-    cp -r /workspace/install/runtime/include/openvino include/.
+    cp -r /workspace/install/runtime/include/* include/. 
 RUN mkdir -p lib && \
     cp -P /usr/lib/x86_64-linux-gnu/libtbb.so* lib/. && \
-    cp -P /workspace/install/runtime/lib/intel64/libopenvino*.so* lib/. \
+    cp -P /workspace/install/runtime/lib/intel64/libopenvino*.so* lib/. && \
+    find /drv/usr/ -iname '*.so*' -exec cp -P {} lib/. \; 
 """
 
     df += """
