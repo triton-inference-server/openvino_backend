@@ -77,7 +77,7 @@ Build the custom triton image with the required runtime drivers using the script
 
 ```
 python3 build.py --target-platform linux --enable-logging --enable-stats --enable-metrics --enable-cpu-metrics --endpoint grpc --endpoint http --filesystem s3 \
---backend openvino:pull/74/head --enable-intel-gpu
+--backend openvino
 ```
 
 
