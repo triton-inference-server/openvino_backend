@@ -112,11 +112,11 @@ RUN /bin/bash -c 'cmake \
 WORKDIR /opt/openvino
 RUN cp -r /workspace/openvino/licensing LICENSE.openvino
 RUN mkdir -p include && \
-    cp -r /workspace/install/runtime/include/* include/. 
+    cp -r /workspace/install/runtime/include/* include/.
 RUN mkdir -p lib && \
     cp -P /workspace/install/runtime/lib/intel64/*.so* lib/. && \
     cp -P /workspace/install/runtime/lib/intel64/libopenvino*.so* lib/. && \
-    find /drv/usr/ -iname '*.so*' -exec cp -P {} lib/. \; 
+    find /drv/usr/ -iname '*.so*' -exec cp -P {} lib/. \;
 """
 
     df += """
