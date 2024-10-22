@@ -132,13 +132,14 @@ SHELL ["cmd", "/S", "/C"]
 # from source.
 # TODO: Unify build steps between windows and linux.
 
-ARG OPENVINO_VERSION=2024.0.0
+ARG OPENVINO_VERSION=2024.4.0
 ARG OPENVINO_BUILD_TYPE
 
 WORKDIR /workspace
 RUN IF "%OPENVINO_VERSION%"=="2023.3.0" curl -L https://storage.openvinotoolkit.org/repositories/openvino/packages/2023.3/windows/w_openvino_toolkit_windows_2023.3.0.13775.ceeafaf64f3_x86_64.zip --output ov.zip
 RUN IF "%OPENVINO_VERSION%"=="2024.0.0" curl -L https://storage.openvinotoolkit.org/repositories/openvino/packages/2024.0/windows/w_openvino_toolkit_windows_2024.0.0.14509.34caeefd078_x86_64.zip --output ov.zip
 RUN IF "%OPENVINO_VERSION%"=="2024.1.0" curl -L https://storage.openvinotoolkit.org/repositories/openvino/packages/2024.1/windows/w_openvino_toolkit_windows_2024.1.0.15008.f4afc983258_x86_64.zip --output ov.zip
+RUN IF "%OPENVINO_VERSION%"=="2024.4.0" curl -L https://storage.openvinotoolkit.org/repositories/openvino/packages/2024.4/windows/w_openvino_toolkit_windows_2024.4.0.16579.c3152d32c9c_x86_64.zip --output ov.zip
 RUN IF not exist ov.zip ( echo "OpenVINO version %OPENVINO_VERSION% not supported" && exit 1 )
 RUN tar -xf ov.zip
 RUN powershell.exe "Get-ChildItem w_openvino_toolkit_windows_* | foreach { ren $_.fullname install }"
