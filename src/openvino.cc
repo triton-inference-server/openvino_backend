@@ -262,11 +262,16 @@ ModelState::ParseParameters(const std::string& device)
   if (status) {
     config_[device] = {};
     auto& device_config = config_.at(device);
-    ParseParameter("INFERENCE_NUM_THREADS", params, &device_config);
-    ParseParameter("COMPILATION_NUM_THREADS", params, &device_config);
-    ParseParameter("HINT_BF16", params, &device_config);
-    ParseParameter("NUM_STREAMS", params, &device_config);
-    ParseParameter("PERFORMANCE_HINT", params, &device_config);
+    RETURN_IF_ERROR(
+      ParseParameter("INFERENCE_NUM_THREADS", params, &device_config));
+    RETURN_IF_ERROR(
+      ParseParameter("COMPILATION_NUM_THREADS", params, &device_config));
+    RETURN_IF_ERROR(
+      ParseParameter("HINT_BF16", params, &device_config));
+    RETURN_IF_ERROR(
+      ParseParameter("NUM_STREAMS", params, &device_config));
+    RETURN_IF_ERROR(
+      ParseParameter("PERFORMANCE_HINT", params, &device_config));
   }
 
   return nullptr;
@@ -276,7 +281,7 @@ TRITONSERVER_Error*
 ModelState::LoadCpuExtensions(triton::common::TritonJson::Value& params)
 {
   std::string cpu_ext_path;
-  ReadParameter(params, "CPU_EXTENSION_PATH", &(cpu_ext_path));
+  RETURN_IF_ERROR(ReadParameter(params, "CPU_EXTENSION_PATH", &(cpu_ext_path), ""));
   if (!cpu_ext_path.empty()) {
     // CPU (MKLDNN) extensions is loaded as a shared library and passed as a
     // pointer to base extension
@@ -284,7 +289,7 @@ ModelState::LoadCpuExtensions(triton::common::TritonJson::Value& params)
         ov_core_.add_extension(cpu_ext_path), " loading custom CPU extensions");
     LOG_MESSAGE(
         TRITONSERVER_LOG_INFO,
-        (std::string("CPU (MKLDNN) extensions is loaded") + cpu_ext_path)
+        (std::string("CPU extensions is loaded") + cpu_ext_path)
             .c_str());
   }
 
@@ -298,7 +303,7 @@ ModelState::ParseBoolParameter(
     bool* setting)
 {
   std::string value;
-  RETURN_IF_ERROR(ReadParameter(params, mkey, &(value)));
+  RETURN_IF_ERROR(ReadParameter(params, mkey, &(value),""));
   std::transform(
       value.begin(), value.end(), value.begin(),
       [](unsigned char c) { return std::tolower(c); });
@@ -315,7 +320,7 @@ ModelState::ParseStringParameter(
     std::string* setting)
 {
   std::string value;
-  RETURN_IF_ERROR(ReadParameter(params, mkey, &(value)));
+  RETURN_IF_ERROR(ReadParameter(params, mkey, &(value), ""));
   std::transform(
       value.begin(), value.end(), value.begin(),
       [](unsigned char c) { return std::toupper(c); });
@@ -332,7 +337,7 @@ ModelState::ParseParameter(
     std::vector<std::pair<std::string, ov::Any>>* device_config)
 {
   std::string value;
-  RETURN_IF_ERROR(ReadParameter(params, mkey, &(value)));
+  RETURN_IF_ERROR(ReadParameter(params, mkey, &(value),""));
   if (!value.empty()) {
     std::pair<std::string, ov::Any> ov_property;
     RETURN_IF_ERROR(ParseParameterHelper(mkey, &value, &ov_property));
@@ -958,8 +963,7 @@ ModelInstanceState::ModelInstanceState(
       model_state_(model_state), device_(model_state->TargetDevice()),
       batch_pad_size_(0)
 {
-  if ((Kind() != TRITONSERVER_INSTANCEGROUPKIND_CPU) &&
-      (Kind() != TRITONSERVER_INSTANCEGROUPKIND_AUTO)) {
+  if (Kind() != TRITONSERVER_INSTANCEGROUPKIND_CPU) {
     throw triton::backend::BackendModelInstanceException(TRITONSERVER_ErrorNew(
         TRITONSERVER_ERROR_INVALID_ARG,
         (std::string("unable to load model '") + model_state_->Name() +
@@ -1638,7 +1642,7 @@ TRITONBACKEND_GetBackendAttribute(
       TRITONSERVER_LOG_VERBOSE,
       "TRITONBACKEND_GetBackendAttribute: setting attributes");
   RETURN_IF_ERROR(TRITONBACKEND_BackendAttributeAddPreferredInstanceGroup(
-      backend_attributes, TRITONSERVER_INSTANCEGROUPKIND_AUTO, 0, nullptr, 0));
+      backend_attributes, TRITONSERVER_INSTANCEGROUPKIND_CPU, 0, nullptr, 0));
 
   return nullptr;
 }

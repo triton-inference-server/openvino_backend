@@ -277,13 +277,14 @@ CompareDimsSupported(
 TRITONSERVER_Error*
 ReadParameter(
     triton::common::TritonJson::Value& params, const std::string& key,
-    std::string* param)
+    std::string* param, const std::string default_value)
 {
   triton::common::TritonJson::Value value;
-  RETURN_ERROR_IF_FALSE(
-      params.Find(key.c_str(), &value), TRITONSERVER_ERROR_INVALID_ARG,
-      std::string("model configuration is missing the parameter ") + key);
-  RETURN_IF_ERROR(value.MemberAsString("string_value", param));
+  if (params.Find(key.c_str(), &value)){
+    RETURN_IF_ERROR(value.MemberAsString("string_value", param));
+  } else {
+    *param = default_value;
+  }
   return nullptr;  // success
 }
 
