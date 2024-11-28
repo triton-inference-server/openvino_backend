@@ -1,5 +1,5 @@
-ARG BASE_OS=tritonserver:latest
-FROM $BASE_OS
+ARG BASE_IMAGE=tritonserver:latest
+FROM $BASE_IMAGE
 RUN mkdir /tmp/neo && cd /tmp/neo && \
     apt-get update && apt-get install -y libtbb12 curl && \
     curl -L -O https://github.com/intel/intel-graphics-compiler/releases/download/igc-1.0.17791.9/intel-igc-core_1.0.17791.9_amd64.deb && \
@@ -12,5 +12,5 @@ RUN mkdir /tmp/neo && cd /tmp/neo && \
     curl -L -O https://github.com/intel/linux-npu-driver/releases/download/v1.10.0/intel-fw-npu_1.10.0.20241107-11729849322_ubuntu24.04_amd64.deb && \
     curl -L -O https://github.com/intel/linux-npu-driver/releases/download/v1.10.0/intel-level-zero-npu_1.10.0.20241107-11729849322_ubuntu24.04_amd64.deb && \
     dpkg -i *.deb && \
-    apt-get install -y ocl-icd-libopencl1 && \
-    rm -Rf /tmp/neo
+    apt-get install -y ocl-icd-libopencl1 --no-install-recommends && \
+    rm -rf /var/lib/apt/lists/* && rm -Rf /tmp/neo

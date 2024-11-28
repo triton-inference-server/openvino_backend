@@ -79,8 +79,9 @@ git clone https://github.com/triton-inference-server/server
 cd server
 pip install distro requests
 python3 build.py --target-platform linux --enable-logging --enable-stats --enable-metrics --enable-cpu-metrics --endpoint grpc --endpoint http --filesystem s3 \
---backend openvino
+--backend openvino:pull/87/head
 ```
+In the backend value, the pull request is optional. Use `--backend openvino` to build from `main` branch.
 It will create an image called `tritonserver:latest`
 
 ## Add Intel GPU and NPU dependencies to the image
@@ -88,7 +89,7 @@ It will create an image called `tritonserver:latest`
 The `Dockerfile.drivers` adds OpenVINO runtime drivers needed to run inference on the accelerators. Use, as the base image, public image with OpenVINO backend or the custom one.
 
 ```
-docker build -f Dockerfile.drivers --build-arg BASE_IMAGE=nvcr.io/nvidia/tritonserver:24.11-py3 -t tritonserver:latest .
+docker build -f Dockerfile.drivers --build-arg BASE_IMAGE=tritonserver:latest -t tritonserver:xpu .
 ```
 
 
@@ -281,7 +282,7 @@ parameters: [
 
 Start the container with extra parameter to pass the device `/dev/dri`:
 ```
-docker run -it --rm --device /dev/dri --group-add=$(stat -c "%g" /dev/dri/render* | head -n 1 )  tritonserver:latest
+docker run -it --rm --device /dev/dri --group-add=$(stat -c "%g" /dev/dri/render* | head -n 1 )  tritonserver:xpu
 ```
 
 ### Running the models on Intel NPU
@@ -300,10 +301,10 @@ parameters: [
 
 Start the container with extra parameter to pass the device `/dev/accel`:
 ```
-docker run -it --rm --device --device /dev/accel --group-add=$(stat -c "%g" /dev/dri/render* | head -n 1)  tritonserver:latest
+docker run -it --rm --device --device /dev/accel --group-add=$(stat -c "%g" /dev/dri/render* | head -n 1)  tritonserver:xpu
 ```
 
 ## Known Issues
 
 * Models with the scalar on the input (shape without any dimension are not supported)
-* Reshaping using [dimension ranges](https://docs.openvino.ai/2023.3/ovms_docs_dynamic_shape_dynamic_model.html) is not supported.
+* Reshaping using [dimension ranges](https://docs.openvino.ai/2024/openvino-workflow/running-inference/dynamic-shapes.html#dimension-bounds) is not supported.

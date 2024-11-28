@@ -280,7 +280,7 @@ ReadParameter(
     std::string* param, const std::string default_value)
 {
   triton::common::TritonJson::Value value;
-  if (params.Find(key.c_str(), &value)){
+  if (params.Find(key.c_str(), &value)) {
     RETURN_IF_ERROR(value.MemberAsString("string_value", param));
   } else {
     *param = default_value;
