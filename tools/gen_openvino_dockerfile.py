@@ -111,7 +111,7 @@ RUN mkdir -p lib && \
 
     df += """
 RUN (cd lib && \
-     for i in `find . -mindepth 1 -maxdepth 1 -type f -name '*\\.so*'`; do \
+     for i in `find . -mindepth 1 -maxdepth 1 -type f -name '*\.so*'`; do \
         patchelf --set-rpath '$ORIGIN' $i; \
      done)
 """
