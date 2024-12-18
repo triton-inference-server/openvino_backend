@@ -1,0 +1,9 @@
+##############################################################
+# List of approvers/reviewers for openvino backend repository
+##############################################################
+# Learn about CODEOWNERS file format:
+#  https://help.github.com/en/articles/about-code-owners
+# These owners will be the default owners for everything in
+# the repo. These owners will be requested for
+# review when someone opens a pull request.
+*       @triton-inference-server/required-code-reviewers
