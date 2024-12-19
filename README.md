@@ -38,11 +38,10 @@ can learn more about Triton backends in the [backend
 repo](https://github.com/triton-inference-server/backend).  Ask
 questions or report problems in the main Triton [issues
 page](https://github.com/triton-inference-server/server/issues). The backend
-is designed to run models in Intermediate Representation (IR), TensorFlow saved_model, TensorFlow Lite, ONNX and PaddlePaddle. PyTorch models can be used after converting to IR or ONNX. See [here](https://docs.openvino.ai/2024/openvino-workflow/model-preparation/convert-model-pytorch.html) for instruction. The backend is implemented using openVINO C++ API.
+is designed to run models in Intermediate Representation (IR), TensorFlow saved_model, TensorFlow Lite, ONNX and PaddlePaddle. PyTorch models can be used after converting to IR or ONNX. See [here](https://docs.openvino.ai/2024/openvino-workflow/model-preparation/convert-model-pytorch.html) for instruction. The backend is implemented using OpenVINO C++ API.
 
 ## Supported Devices
-OpenVINO backend in the public docker image version currently supports inference only on Intel CPU devices using [OpenVINO CPU plugin](https://docs.openvino.ai/2024/openvino-workflow/running-inference/inference-devices-and-modes/cpu-device.html). Note the CPU plugin does not support
-iGPU.
+OpenVINO backend in the public docker image version currently supports inference only on Intel CPU devices using [OpenVINO CPU plugin](https://docs.openvino.ai/2024/openvino-workflow/running-inference/inference-devices-and-modes/cpu-device.html). Note the CPU plugin does not support iGPU.
 
 ## Build the OpenVINO Backend
 
