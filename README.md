@@ -30,7 +30,7 @@
 
 # OpenVINO Backend
 
-**Note: OpenVINO backend is now considered of general availability. It is co-maintained by Nvidia and Intel.**
+**Note: The OpenVINO backend is co-maintained by Nvidia and Intel.**
 
 The Triton backend for the
 [OpenVINO](https://docs.openvino.ai/). You
