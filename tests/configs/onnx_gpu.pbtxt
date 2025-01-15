@@ -1,0 +1,30 @@
+backend: "openvino"
+input: [
+  {
+    name: "gpu_0/data_0"
+    data_type: TYPE_FP32
+    dims: [ -1, 3, 224, 224]
+  }
+]
+parameters: [
+{
+   key: "NUM_STREAMS"
+   value: {
+     string_value: "1"
+   }
+},
+{
+   key: "PERFORMANCE_HINT"
+   value: {
+     string_value: "LATENCY"
+   }
+},
+{
+   key: "TARGET_DEVICE"
+   value: {
+     string_value: "GPU"
+   }
+}
+
+]
+default_model_filename: "model.onnx"
