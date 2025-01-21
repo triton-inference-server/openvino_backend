@@ -69,8 +69,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         ca-certificates \
         python3-pip
 
-RUN pip3 install --upgrade pip \
-    && pip3 install patchelf==0.17.2
+RUN pip3 install patchelf==0.17.2
 
 # Build instructions:
 # https://github.com/openvinotoolkit/openvino/wiki/BuildingForLinux
