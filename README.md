@@ -48,7 +48,8 @@ OpenVINO backend in the public docker image version currently supports inference
 Cmake 3.17 or higher is required. First install the required dependencies.
 
 ```
-$ apt-get install patchelf rapidjson-dev python3-dev
+$ apt-get install rapidjson-dev python3-dev python3-pip
+$ pip3 install patchelf==0.17.2
 ```
 
 Follow the steps below to build the backend shared library.

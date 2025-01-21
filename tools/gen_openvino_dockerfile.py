@@ -62,12 +62,15 @@ ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends \
         cmake \
         libglib2.0-dev \
-        patchelf \
         git \
         make \
         build-essential \
         wget \
-        ca-certificates
+        ca-certificates \
+        python3-pip
+
+RUN pip3 install --upgrade pip \
+    && pip3 install patchelf==0.17.2
 
 # Build instructions:
 # https://github.com/openvinotoolkit/openvino/wiki/BuildingForLinux
