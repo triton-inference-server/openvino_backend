@@ -6,4 +6,4 @@
 # These owners will be the default owners for everything in
 # the repo. These owners will be requested for
 # review when someone opens a pull request.
-*       @triton-inference-server/openvino-maintainers
+*       @nnshah1 @dtrawins
