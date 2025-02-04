@@ -210,7 +210,6 @@ else()
     COMMAND rm -fr openvino
     COMMAND docker cp openvino_backend_ov:/opt/openvino openvino
     COMMAND docker rm openvino_backend_ov
-    COMMAND echo '<ie><plugins><plugin name=\"CPU\" location=\"libopenvino_intel_cpu_plugin.so\"></plugin></plugins></ie>' >> openvino/lib/plugins.xml
     COMMENT "Building OpenVino"
   )
 endif() # WIN32
