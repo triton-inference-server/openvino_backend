@@ -58,16 +58,19 @@ def dockerfile_for_linux(output_file):
     df += """
 # Ensure apt-get won't prompt for selecting options
 ENV DEBIAN_FRONTEND=noninteractive
+ENV PIP_BREAK_SYSTEM_PACKAGES=1
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
         cmake \
         libglib2.0-dev \
-        patchelf \
         git \
         make \
         build-essential \
         wget \
-        ca-certificates
+        ca-certificates \
+        python3-pip
+
+RUN pip3 install patchelf==0.17.2
 
 # Build instructions:
 # https://github.com/openvinotoolkit/openvino/wiki/BuildingForLinux
