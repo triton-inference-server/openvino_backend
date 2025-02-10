@@ -38,10 +38,10 @@ can learn more about Triton backends in the [backend
 repo](https://github.com/triton-inference-server/backend).  Ask
 questions or report problems in the main Triton [issues
 page](https://github.com/triton-inference-server/server/issues). The backend
-is designed to run models in Intermediate Representation (IR), TensorFlow saved_model, TensorFlow Lite, ONNX and PaddlePaddle. PyTorch models can be used after converting to IR or ONNX. See [here](https://docs.openvino.ai/2024/openvino-workflow/model-preparation/convert-model-pytorch.html) for instruction. The backend is implemented using OpenVINO C++ API.
+is designed to run models in Intermediate Representation (IR), TensorFlow saved_model, TensorFlow Lite, ONNX and PaddlePaddle. PyTorch models can be used after converting to IR or ONNX. See [here](https://docs.openvino.ai/2025/openvino-workflow/model-preparation/convert-model-pytorch.html) for instruction. The backend is implemented using OpenVINO C++ API.
 
 ## Supported Devices
-OpenVINO backend in the public docker image version currently supports inference only on Intel CPU devices using [OpenVINO CPU plugin](https://docs.openvino.ai/2024/openvino-workflow/running-inference/inference-devices-and-modes/cpu-device.html). Note the CPU plugin does not support iGPU.
+OpenVINO backend in the public docker image version currently supports inference only on Intel CPU devices using [OpenVINO CPU plugin](https://docs.openvino.ai/2025/openvino-workflow/running-inference/inference-devices-and-modes/cpu-device.html). Note the CPU plugin does not support iGPU.
 
 ## Build the OpenVINO Backend
 
@@ -57,7 +57,7 @@ Follow the steps below to build the backend shared library.
 ```
 $ mkdir build
 $ cd build
-$ cmake -DCMAKE_INSTALL_PREFIX:PATH=`pwd`/install -DTRITON_BUILD_OPENVINO_VERSION=2024.5.0 -DTRITON_BUILD_CONTAINER_VERSION=24.12  ..
+$ cmake -DCMAKE_INSTALL_PREFIX:PATH=`pwd`/install -DTRITON_BUILD_OPENVINO_VERSION=2025.0.0 -DTRITON_BUILD_CONTAINER_VERSION=25.01  ..
 $ make install
 ```
 
@@ -86,7 +86,6 @@ to skip the dynamic batch sizes in backend.
 * `ENABLE_BATCH_PADDING`: By default an error will be generated if backend receives a request with batch size less than max_batch_size specified in the configuration. This error can be avoided at a cost of performance by specifying `ENABLE_BATCH_PADDING` parameter as `YES`.
 * `RESHAPE_IO_LAYERS`: By setting this parameter as `YES`, the IO layers are reshaped to the dimensions provided in
 model configuration. By default, the dimensions in the model is used.
-
 
 
 ## Auto-Complete Model Configuration
@@ -237,5 +236,5 @@ Examples of the supported models and configs are included in the [functional tes
 ## Known Issues
 
 * Models with the scalar on the input (shape without any dimension are not supported)
-* Reshaping using [dimension ranges](https://docs.openvino.ai/2024/openvino-workflow/model-server/ovms_docs_dynamic_shape_dynamic_model.html) is not supported.
+* Reshaping using [dimension ranges](https://docs.openvino.ai/2025/openvino-workflow/model-server/ovms_docs_dynamic_shape_dynamic_model.html) is not supported.
 * Models without output names are not supported. Models must be saved with names assigned.
