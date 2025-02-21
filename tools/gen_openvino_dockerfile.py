@@ -55,7 +55,7 @@ WORKDIR /workspace
 
 def dockerfile_for_linux(output_file):
     df = dockerfile_common()
-    if os.getenv(CCACHE_REMOTE_ONLY) and os.getenv(CCACHE_REMOTE_STORAGE):
+    if os.getenv("CCACHE_REMOTE_ONLY") and os.getenv("CCACHE_REMOTE_STORAGE"):
         df += """
 ENV CCACHE_REMOTE_ONLY="true"
 ENV CCACHE_REMOTE_STORAGE="{}"
