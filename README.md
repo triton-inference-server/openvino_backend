@@ -30,28 +30,26 @@
 
 # OpenVINO Backend
 
-**Note: OpenVINO backend is beta quality. As a result you may
-encounter performance and functional issues that will be resolved in
-future releases.**
+**Note: The OpenVINO backend is co-maintained by Nvidia and Intel.**
 
 The Triton backend for the
-[OpenVINO](https://docs.openvinotoolkit.org/latest/index.html). You
+[OpenVINO](https://docs.openvino.ai/). You
 can learn more about Triton backends in the [backend
 repo](https://github.com/triton-inference-server/backend).  Ask
 questions or report problems in the main Triton [issues
 page](https://github.com/triton-inference-server/server/issues). The backend
-is designed to run models in Intermediate Representation (IR). See [here](https://docs.openvinotoolkit.org/latest/openvino_docs_MO_DG_prepare_model_convert_model_Converting_Model.html) for instruction to convert a model to IR format. The backend is implemented using openVINO C++ API. Auto completion of the model config is not supported in the backend and complete `config.pbtxt` must be provided with the model.
+is designed to run models in Intermediate Representation (IR), TensorFlow saved_model, TensorFlow Lite, ONNX and PaddlePaddle. PyTorch models can be used after converting to IR or ONNX. See [here](https://docs.openvino.ai/2024/openvino-workflow/model-preparation/convert-model-pytorch.html) for instruction. The backend is implemented using OpenVINO C++ API.
 
 ## Supported Devices
-OpenVINO backend currently supports inference only on Intel CPU devices using [OpenVINO CPU plugin](https://docs.openvinotoolkit.org/latest/openvino_docs_IE_DG_supported_plugins_CPU.html). Note the CPU plugin does not support
-iGPU.
+OpenVINO backend in the public docker image version currently supports inference only on Intel CPU devices using [OpenVINO CPU plugin](https://docs.openvino.ai/2024/openvino-workflow/running-inference/inference-devices-and-modes/cpu-device.html). Note the CPU plugin does not support iGPU.
 
 ## Build the OpenVINO Backend
 
 Cmake 3.17 or higher is required. First install the required dependencies.
 
 ```
-$ apt-get install patchelf rapidjson-dev python3-dev
+$ apt-get install rapidjson-dev python3-dev python3-pip
+$ pip3 install patchelf==0.17.2
 ```
 
 Follow the steps below to build the backend shared library.
@@ -59,7 +57,7 @@ Follow the steps below to build the backend shared library.
 ```
 $ mkdir build
 $ cd build
-$ cmake -DCMAKE_INSTALL_PREFIX:PATH=`pwd`/install -DTRITON_BUILD_OPENVINO_VERSION=2024.4.0 -DTRITON_BUILD_CONTAINER_VERSION=24.03 ..
+$ cmake -DCMAKE_INSTALL_PREFIX:PATH=`pwd`/install -DTRITON_BUILD_OPENVINO_VERSION=2024.5.0 -DTRITON_BUILD_CONTAINER_VERSION=24.12  ..
 $ make install
 ```
 
@@ -232,7 +230,12 @@ string_value:"yes"
 }
 ```
 
+Check also the [Quick deploy guide](https://github.com/triton-inference-server/tutorials/tree/main/Quick_Deploy/OpenVINO).
+
+Examples of the supported models and configs are included in the [functional tests](tests).
+
 ## Known Issues
 
 * Models with the scalar on the input (shape without any dimension are not supported)
-* Reshaping using [dimension ranges](https://docs.openvino.ai/2023.3/ovms_docs_dynamic_shape_dynamic_model.html) is not supported.
+* Reshaping using [dimension ranges](https://docs.openvino.ai/2024/openvino-workflow/model-server/ovms_docs_dynamic_shape_dynamic_model.html) is not supported.
+* Models without output names are not supported. Models must be saved with names assigned.

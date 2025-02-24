@@ -58,16 +58,19 @@ def dockerfile_for_linux(output_file):
     df += """
 # Ensure apt-get won't prompt for selecting options
 ENV DEBIAN_FRONTEND=noninteractive
+ENV PIP_BREAK_SYSTEM_PACKAGES=1
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
         cmake \
         libglib2.0-dev \
-        patchelf \
         git \
         make \
         build-essential \
         wget \
-        ca-certificates
+        ca-certificates \
+        python3-pip
+
+RUN pip3 install patchelf==0.17.2
 
 # Build instructions:
 # https://github.com/openvinotoolkit/openvino/wiki/BuildingForLinux
@@ -132,7 +135,7 @@ SHELL ["cmd", "/S", "/C"]
 # from source.
 # TODO: Unify build steps between windows and linux.
 
-ARG OPENVINO_VERSION=2024.4.0
+ARG OPENVINO_VERSION=2024.5.0
 ARG OPENVINO_BUILD_TYPE
 
 WORKDIR /workspace
@@ -140,6 +143,7 @@ RUN IF "%OPENVINO_VERSION%"=="2023.3.0" curl -L https://storage.openvinotoolkit.
 RUN IF "%OPENVINO_VERSION%"=="2024.0.0" curl -L https://storage.openvinotoolkit.org/repositories/openvino/packages/2024.0/windows/w_openvino_toolkit_windows_2024.0.0.14509.34caeefd078_x86_64.zip --output ov.zip
 RUN IF "%OPENVINO_VERSION%"=="2024.1.0" curl -L https://storage.openvinotoolkit.org/repositories/openvino/packages/2024.1/windows/w_openvino_toolkit_windows_2024.1.0.15008.f4afc983258_x86_64.zip --output ov.zip
 RUN IF "%OPENVINO_VERSION%"=="2024.4.0" curl -L https://storage.openvinotoolkit.org/repositories/openvino/packages/2024.4/windows/w_openvino_toolkit_windows_2024.4.0.16579.c3152d32c9c_x86_64.zip --output ov.zip
+RUN IF "%OPENVINO_VERSION%"=="2024.5.0" curl -L https://storage.openvinotoolkit.org/repositories/openvino/packages/2024.5/windows/w_openvino_toolkit_windows_2024.5.0.17288.7975fa5da0c_x86_64.zip --output ov.zip
 RUN IF not exist ov.zip ( echo "OpenVINO version %OPENVINO_VERSION% not supported" && exit 1 )
 RUN tar -xf ov.zip
 RUN powershell.exe "Get-ChildItem w_openvino_toolkit_windows_* | foreach { ren $_.fullname install }"
@@ -152,8 +156,6 @@ RUN xcopy /I /E \\workspace\\install\\runtime\\bin\\intel64\\%OPENVINO_BUILD_TYP
 RUN xcopy /I /E \\workspace\\install\\runtime\\lib\\intel64\\%OPENVINO_BUILD_TYPE% lib
 RUN copy \\workspace\\install\\runtime\\3rdparty\\tbb\\bin\\tbb12.dll bin\\tbb12.dll
 RUN copy \\workspace\\install\\runtime\\3rdparty\\tbb\\bin\\tbb12_debug.dll bin\\tbb12_debug.dll
-RUN copy \\workspace\\install\\runtime\\3rdparty\\tbb\\lib\\tbb.lib lib\\tbb.lib
-RUN copy \\workspace\\install\\runtime\\3rdparty\\tbb\\lib\\tbb_debug.lib lib\\tbb_debug.lib
 RUN copy \\workspace\\install\\runtime\\3rdparty\\tbb\\lib\\tbb12.lib lib\\tbb12.lib
 RUN copy \\workspace\\install\\runtime\\3rdparty\\tbb\\lib\\tbb12_debug.lib lib\\tbb12_debug.lib
 """
