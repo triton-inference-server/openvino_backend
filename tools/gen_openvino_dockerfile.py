@@ -55,6 +55,22 @@ WORKDIR /workspace
 
 def dockerfile_for_linux(output_file):
     df = dockerfile_common()
+    if os.getenv("CCACHE_REMOTE_ONLY") and os.getenv("CCACHE_REMOTE_STORAGE"):
+        df += """
+ENV CCACHE_REMOTE_ONLY="true" \\
+    CCACHE_REMOTE_STORAGE="{}" \\
+    CMAKE_CXX_COMPILER_LAUNCHER="ccache" \\
+    CMAKE_C_COMPILER_LAUNCHER="ccache" \\
+    CMAKE_CUDA_COMPILER_LAUNCHER="ccache" \\
+    VERBOSE=1
+
+RUN apt-get update \\
+      && apt-get install -y --no-install-recommends ccache && ccache -p \\
+      && rm -rf /var/lib/apt/lists/*
+""".format(
+            os.getenv("CCACHE_REMOTE_STORAGE")
+        )
+
     df += """
 # Ensure apt-get won't prompt for selecting options
 ENV DEBIAN_FRONTEND=noninteractive
