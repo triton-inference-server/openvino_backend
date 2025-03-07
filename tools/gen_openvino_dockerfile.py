@@ -163,7 +163,7 @@ RUN IF "%OPENVINO_VERSION%"=="2024.5.0" curl -L https://storage.openvinotoolkit.
 RUN IF "%OPENVINO_VERSION%"=="2025.0.0" curl -L https://storage.openvinotoolkit.org/repositories/openvino/packages/2025.0/windows/openvino_toolkit_windows_2025.0.0.17942.1f68be9f594_x86_64.zip --output ov.zip
 RUN IF not exist ov.zip ( echo "OpenVINO version %OPENVINO_VERSION% not supported" && exit 1 )
 RUN tar -xf ov.zip
-RUN powershell.exe "Get-ChildItem w_openvino_toolkit_windows_* | foreach { ren $_.fullname install }"
+RUN powershell.exe "Get-ChildItem *openvino_toolkit_windows_* | foreach { ren $_.fullname install }"
 
 WORKDIR /opt/openvino
 RUN xcopy /I /E \\workspace\\install\\docs\\licensing LICENSE.openvino
