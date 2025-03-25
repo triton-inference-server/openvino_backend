@@ -55,6 +55,22 @@ WORKDIR /workspace
 
 def dockerfile_for_linux(output_file):
     df = dockerfile_common()
+    if os.getenv("CCACHE_REMOTE_ONLY") and os.getenv("CCACHE_REMOTE_STORAGE"):
+        df += """
+ENV CCACHE_REMOTE_ONLY="true" \\
+    CCACHE_REMOTE_STORAGE="{}" \\
+    CMAKE_CXX_COMPILER_LAUNCHER="ccache" \\
+    CMAKE_C_COMPILER_LAUNCHER="ccache" \\
+    CMAKE_CUDA_COMPILER_LAUNCHER="ccache" \\
+    VERBOSE=1
+
+RUN apt-get update \\
+      && apt-get install -y --no-install-recommends ccache && ccache -p \\
+      && rm -rf /var/lib/apt/lists/*
+""".format(
+            os.getenv("CCACHE_REMOTE_STORAGE")
+        )
+
     df += """
 # Ensure apt-get won't prompt for selecting options
 ENV DEBIAN_FRONTEND=noninteractive
@@ -135,7 +151,7 @@ SHELL ["cmd", "/S", "/C"]
 # from source.
 # TODO: Unify build steps between windows and linux.
 
-ARG OPENVINO_VERSION=2024.5.0
+ARG OPENVINO_VERSION=2025.0.0
 ARG OPENVINO_BUILD_TYPE
 
 WORKDIR /workspace
@@ -144,6 +160,7 @@ RUN IF "%OPENVINO_VERSION%"=="2024.0.0" curl -L https://storage.openvinotoolkit.
 RUN IF "%OPENVINO_VERSION%"=="2024.1.0" curl -L https://storage.openvinotoolkit.org/repositories/openvino/packages/2024.1/windows/w_openvino_toolkit_windows_2024.1.0.15008.f4afc983258_x86_64.zip --output ov.zip
 RUN IF "%OPENVINO_VERSION%"=="2024.4.0" curl -L https://storage.openvinotoolkit.org/repositories/openvino/packages/2024.4/windows/w_openvino_toolkit_windows_2024.4.0.16579.c3152d32c9c_x86_64.zip --output ov.zip
 RUN IF "%OPENVINO_VERSION%"=="2024.5.0" curl -L https://storage.openvinotoolkit.org/repositories/openvino/packages/2024.5/windows/w_openvino_toolkit_windows_2024.5.0.17288.7975fa5da0c_x86_64.zip --output ov.zip
+RUN IF "%OPENVINO_VERSION%"=="2025.0.0" curl -L https://storage.openvinotoolkit.org/repositories/openvino/packages/2025.0/windows/openvino_toolkit_windows_2025.0.0.17942.1f68be9f594_x86_64.zip --output ov.zip
 RUN IF not exist ov.zip ( echo "OpenVINO version %OPENVINO_VERSION% not supported" && exit 1 )
 RUN tar -xf ov.zip
 RUN powershell.exe "Get-ChildItem w_openvino_toolkit_windows_* | foreach { ren $_.fullname install }"
