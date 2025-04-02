@@ -1,4 +1,4 @@
-// Copyright 2021-2022, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2021-2025, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -678,7 +678,7 @@ ModelState::AutoCompleteConfig()
   RETURN_IF_ERROR(
       ModelConfig().MemberAsString("default_model_filename", &artifact_name));
   std::string model_path;
-  THROW_IF_BACKEND_INSTANCE_ERROR(ReadModel(artifact_name, &model_path));
+  RETURN_IF_ERROR(ReadModel(artifact_name, &model_path));
   model_read_ = false;  // Re-read model after autocomplete
 
   // Get OV model inputs and outputs
