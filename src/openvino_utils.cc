@@ -68,8 +68,6 @@ ConvertFromOpenVINOElement(ov::element::Type openvino_element)
     case ov::element::u64:
       return TRITONSERVER_TYPE_UINT64;
     // The following types are not supported:
-    // Unspecified value. Used by default
-    case ov::element::undefined:
     // Dynamic value
     case ov::element::dynamic:
     // 16bit floating point value, 8 bit for exponent, 7 bit for mantisa
@@ -162,7 +160,7 @@ ModelConfigDataTypeToOpenVINOElement(const std::string& data_type_str)
     }
   }
 
-  return ov::element::undefined;
+  return ov::element::dynamic;
 }
 
 std::string

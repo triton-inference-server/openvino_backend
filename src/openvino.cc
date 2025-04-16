@@ -532,13 +532,6 @@ ModelState::ValidateInputs(const size_t expected_input_cnt)
     }
 
     auto openvino_element = ModelConfigDataTypeToOpenVINOElement(io_dtype);
-    if (openvino_element == ov::element::undefined) {
-      return TRITONSERVER_ErrorNew(
-          TRITONSERVER_ERROR_INTERNAL,
-          (std::string("unsupported datatype ") + io_dtype + " for input '" +
-           io_name + "' for model '" + Name() + "'")
-              .c_str());
-    }
     RETURN_IF_OPENVINO_ERROR(
         ppp.input(io_name).tensor().set_element_type(openvino_element),
         std::string("setting precision for " + io_name).c_str());
@@ -633,13 +626,6 @@ ModelState::ValidateOutputs()
     }
 
     auto openvino_element = ModelConfigDataTypeToOpenVINOElement(io_dtype);
-    if (openvino_element == ov::element::undefined) {
-      return TRITONSERVER_ErrorNew(
-          TRITONSERVER_ERROR_INTERNAL,
-          (std::string("unsupported datatype ") + io_dtype + " for output '" +
-           io_name + "' for model '" + Name() + "'")
-              .c_str());
-    }
     RETURN_IF_OPENVINO_ERROR(
         ppp.output(io_name).tensor().set_element_type(openvino_element),
         std::string("setting precision for " + io_name).c_str());
@@ -1261,7 +1247,7 @@ ModelInstanceState::SetInputTensors(
              "batch_size equal to max_batch_size for better performance.")
                 .c_str());
       }
-      char* dest = (char*)input_tensor.data(ov::element::undefined);
+      char* dest = (char*)input_tensor.data(ov::element::dynamic);
       memset(dest, 0, input_tensor.get_byte_size());
       collector.ProcessTensor(
           input_name, dest, input_tensor.get_byte_size(),
@@ -1329,7 +1315,7 @@ ModelInstanceState::ReadOutputTensors(
 
     responder.ProcessTensor(
         name, ConvertFromOpenVINOElement(output_tensor.get_element_type()),
-        output_shape, (const char*)output_tensor.data(ov::element::undefined),
+        output_shape, (const char*)output_tensor.data(ov::element::dynamic),
         TRITONSERVER_MEMORY_CPU, 0);
   }
 
