@@ -532,6 +532,13 @@ ModelState::ValidateInputs(const size_t expected_input_cnt)
     }
 
     auto openvino_element = ModelConfigDataTypeToOpenVINOElement(io_dtype);
+    if (openvino_element == ov::element::dynamic) {
+      return TRITONSERVER_ErrorNew(
+          TRITONSERVER_ERROR_INTERNAL,
+          (std::string("unsupported datatype ") + io_dtype + " for input '" +
+           io_name + "' for model '" + Name() + "'")
+              .c_str());
+    }
     RETURN_IF_OPENVINO_ERROR(
         ppp.input(io_name).tensor().set_element_type(openvino_element),
         std::string("setting precision for " + io_name).c_str());
@@ -626,6 +633,13 @@ ModelState::ValidateOutputs()
     }
 
     auto openvino_element = ModelConfigDataTypeToOpenVINOElement(io_dtype);
+    if (openvino_element == ov::element::dynamic) {
+      return TRITONSERVER_ErrorNew(
+          TRITONSERVER_ERROR_INTERNAL,
+          (std::string("unsupported datatype ") + io_dtype + " for output '" +
+           io_name + "' for model '" + Name() + "'")
+              .c_str());
+    }
     RETURN_IF_OPENVINO_ERROR(
         ppp.output(io_name).tensor().set_element_type(openvino_element),
         std::string("setting precision for " + io_name).c_str());
