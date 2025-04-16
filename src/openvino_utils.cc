@@ -117,7 +117,7 @@ ConvertToOpenVINOElement(TRITONSERVER_DataType data_type)
       break;
   }
 
-  return ov::element::undefined;
+  return ov::element::dynamic;
 }
 
 ov::element::Type
