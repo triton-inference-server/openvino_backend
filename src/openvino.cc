@@ -1247,7 +1247,9 @@ ModelInstanceState::SetInputTensors(
       batchn_shape[0] = total_batch_size;
     }
 
-    const int64_t batchn_byte_size = GetByteSize(input_datatype, batchn_shape);
+    int64_t batchn_byte_size = 0;
+    RETURN_IF_ERROR(
+        GetByteSize(input_datatype, batchn_shape, &batchn_byte_size));
 
     if (batch_pad_size_ != 0) {
       ov::Tensor input_tensor =
