@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright 2021-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# Copyright 2021-2025, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -145,13 +145,13 @@ def dockerfile_for_windows(output_file):
 SHELL ["cmd", "/S", "/C"]
 
 # Install instructions:
-# https://docs.openvino.ai/2024/get-started/install-openvino/install-openvino-archive-windows.html
+# https://docs.openvino.ai/2025/get-started/install-openvino/install-openvino-archive-windows.html
 
 # The windows part is using pre-build archive, while the linux part is building
 # from source.
 # TODO: Unify build steps between windows and linux.
 
-ARG OPENVINO_VERSION=2025.0.0
+ARG OPENVINO_VERSION=2025.2.0
 ARG OPENVINO_BUILD_TYPE
 
 WORKDIR /workspace
@@ -161,7 +161,10 @@ RUN IF "%OPENVINO_VERSION%"=="2024.1.0" curl -L https://storage.openvinotoolkit.
 RUN IF "%OPENVINO_VERSION%"=="2024.4.0" curl -L https://storage.openvinotoolkit.org/repositories/openvino/packages/2024.4/windows/w_openvino_toolkit_windows_2024.4.0.16579.c3152d32c9c_x86_64.zip --output ov.zip
 RUN IF "%OPENVINO_VERSION%"=="2024.5.0" curl -L https://storage.openvinotoolkit.org/repositories/openvino/packages/2024.5/windows/w_openvino_toolkit_windows_2024.5.0.17288.7975fa5da0c_x86_64.zip --output ov.zip
 RUN IF "%OPENVINO_VERSION%"=="2025.0.0" curl -L https://storage.openvinotoolkit.org/repositories/openvino/packages/2025.0/windows/openvino_toolkit_windows_2025.0.0.17942.1f68be9f594_x86_64.zip --output ov.zip
+RUN IF "%OPENVINO_VERSION%"=="2025.1.0" curl -L https://storage.openvinotoolkit.org/repositories/openvino/packages/2025.1/windows/openvino_toolkit_windows_2025.1.0.18503.6fec06580ab_x86_64.zip --output ov.zip
+RUN IF "%OPENVINO_VERSION%"=="2025.2.0" curl -L https://storage.openvinotoolkit.org/repositories/openvino/packages/2025.2/windows/openvino_toolkit_windows_2025.2.0.19140.c01cd93e24d_x86_64.zip --output ov.zip
 RUN IF not exist ov.zip ( echo "OpenVINO version %OPENVINO_VERSION% not supported" && exit 1 )
+
 RUN tar -xf ov.zip
 RUN powershell.exe "Get-ChildItem w_openvino_toolkit_windows_* | foreach { ren $_.fullname install }"
 

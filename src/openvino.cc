@@ -1,4 +1,4 @@
-// Copyright 2021-2022, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2021-2025, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -557,7 +557,7 @@ ModelState::ValidateInputs(const size_t expected_input_cnt)
     }
 
     auto openvino_element = ModelConfigDataTypeToOpenVINOElement(io_dtype);
-    if (openvino_element == ov::element::undefined) {
+    if (openvino_element == ov::element::dynamic) {
       return TRITONSERVER_ErrorNew(
           TRITONSERVER_ERROR_INTERNAL,
           (std::string("unsupported datatype ") + io_dtype + " for input '" +
@@ -658,7 +658,7 @@ ModelState::ValidateOutputs()
     }
 
     auto openvino_element = ModelConfigDataTypeToOpenVINOElement(io_dtype);
-    if (openvino_element == ov::element::undefined) {
+    if (openvino_element == ov::element::dynamic) {
       return TRITONSERVER_ErrorNew(
           TRITONSERVER_ERROR_INTERNAL,
           (std::string("unsupported datatype ") + io_dtype + " for output '" +
@@ -703,7 +703,7 @@ ModelState::AutoCompleteConfig()
   RETURN_IF_ERROR(
       ModelConfig().MemberAsString("default_model_filename", &artifact_name));
   std::string model_path;
-  THROW_IF_BACKEND_INSTANCE_ERROR(ReadModel(artifact_name, &model_path));
+  RETURN_IF_ERROR(ReadModel(artifact_name, &model_path));
   model_read_ = false;  // Re-read model after autocomplete
 
   // Get OV model inputs and outputs
@@ -1279,7 +1279,9 @@ ModelInstanceState::SetInputTensors(
       batchn_shape[0] = total_batch_size;
     }
 
-    const int64_t batchn_byte_size = GetByteSize(input_datatype, batchn_shape);
+    int64_t batchn_byte_size = 0;
+    RETURN_IF_ERROR(
+        GetByteSize(input_datatype, batchn_shape, &batchn_byte_size));
 
     if (batch_pad_size_ != 0) {
       ov::Tensor input_tensor =
@@ -1293,7 +1295,7 @@ ModelInstanceState::SetInputTensors(
              "batch_size equal to max_batch_size for better performance.")
                 .c_str());
       }
-      char* dest = (char*)input_tensor.data(ov::element::undefined);
+      char* dest = (char*)input_tensor.data(ov::element::dynamic);
       memset(dest, 0, input_tensor.get_byte_size());
       collector.ProcessTensor(
           input_name, dest, input_tensor.get_byte_size(),
@@ -1361,7 +1363,7 @@ ModelInstanceState::ReadOutputTensors(
 
     responder.ProcessTensor(
         name, ConvertFromOpenVINOElement(output_tensor.get_element_type()),
-        output_shape, (const char*)output_tensor.data(ov::element::undefined),
+        output_shape, (const char*)output_tensor.data(ov::element::dynamic),
         TRITONSERVER_MEMORY_CPU, 0);
   }
 
