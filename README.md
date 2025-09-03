@@ -77,7 +77,7 @@ git clone https://github.com/triton-inference-server/server
 cd server
 pip install distro requests
 python3 build.py --target-platform linux --enable-logging --enable-stats --enable-metrics --enable-cpu-metrics --endpoint grpc --endpoint http --filesystem s3 \
---backend openvino:pull/87/head
+--backend openvino
 ```
 In the backend value, the pull request is optional. Use `--backend openvino` to build from `main` branch.
 It will create an image called `tritonserver:latest`
