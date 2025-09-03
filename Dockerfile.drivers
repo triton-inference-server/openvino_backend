@@ -1,0 +1,16 @@
+ARG BASE_IMAGE=tritonserver:latest
+FROM $BASE_IMAGE
+RUN mkdir /tmp/neo && cd /tmp/neo && \
+    apt-get update && apt-get install -y libtbb12 curl && \
+    curl -L -O https://github.com/intel/compute-runtime/releases/download/25.31.34666.3/libze-intel-gpu1_25.31.34666.3-0_amd64.deb && \
+    curl -L -O https://github.com/intel/compute-runtime/releases/download/25.31.34666.3/intel-opencl-icd_25.31.34666.3-0_amd64.deb && \
+    curl -L -O https://github.com/intel/compute-runtime/releases/download/25.31.34666.3/libigdgmm12_22.8.1_amd64.deb && \
+    curl -L -O https://github.com/intel/compute-runtime/releases/download/25.31.34666.3/intel-ocloc_25.31.34666.3-0_amd64.deb && \
+    curl -L -O https://github.com/intel/intel-graphics-compiler/releases/download/v2.16.0/intel-igc-core-2_2.16.0+19683_amd64.deb && \
+    curl -L -O https://github.com/intel/intel-graphics-compiler/releases/download/v2.16.0/intel-igc-opencl-2_2.16.0+19683_amd64.deb && \
+    curl -L -O https://github.com/intel/linux-npu-driver/releases/download/v1.23.0/linux-npu-driver-v1.23.0.20250827-17270089246-ubuntu2404.tar.gz && \
+    tar -xf linux-npu-driver-v1.23.0.20250827-17270089246-ubuntu2404.tar.gz && \
+    curl -L -O https://github.com/oneapi-src/level-zero/releases/download/v1.22.4/level-zero_1.22.4+u24.04_amd64.deb && \
+    dpkg -i *.deb && \
+    apt-get install -y ocl-icd-libopencl1 --no-install-recommends && \
+    rm -rf /var/lib/apt/lists/* && rm -Rf /tmp/neo
