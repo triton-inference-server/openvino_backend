@@ -57,7 +57,7 @@ Follow the steps below to build the backend shared library.
 ```
 $ mkdir build
 $ cd build
-$ cmake -DCMAKE_INSTALL_PREFIX:PATH=`pwd`/install -DTRITON_BUILD_OPENVINO_VERSION=2025.2.0 -DTRITON_BUILD_CONTAINER_VERSION=25.06  ..
+$ cmake -DCMAKE_INSTALL_PREFIX:PATH=`pwd`/install -DTRITON_BUILD_OPENVINO_VERSION=2025.3.0 -DTRITON_BUILD_CONTAINER_VERSION=25.08  ..
 $ make install
 ```
 
