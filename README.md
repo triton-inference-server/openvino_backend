@@ -60,6 +60,7 @@ $ cd build
 $ cmake -DCMAKE_INSTALL_PREFIX:PATH=`pwd`/install -DTRITON_BUILD_OPENVINO_VERSION=2025.3.0 -DTRITON_BUILD_CONTAINER_VERSION=25.08  ..
 $ make install
 ```
+The compiled backend will be added to `build/install/backends/openvino` folder.
 
 The following required Triton repositories will be pulled and used in
 the build. By default the "main" branch/tag will be used for each repo
@@ -68,6 +69,27 @@ but the listed CMake argument can be used to override.
 * triton-inference-server/backend: -DTRITON_BACKEND_REPO_TAG=[tag]
 * triton-inference-server/core: -DTRITON_CORE_REPO_TAG=[tag]
 * triton-inference-server/common: -DTRITON_COMMON_REPO_TAG=[tag]
+
+## Build a complete triton custom image with OpenVINO backend
+
+```
+git clone https://github.com/triton-inference-server/server
+cd server
+pip install distro requests
+python3 build.py --target-platform linux --enable-logging --enable-stats --enable-metrics --enable-cpu-metrics --endpoint grpc --endpoint http --filesystem s3 \
+--backend openvino
+```
+In the backend value, the pull request is optional. Use `--backend openvino` to build from `main` branch.
+It will create an image called `tritonserver:latest`
+
+## Add Intel GPU and NPU dependencies to the image
+
+The `Dockerfile.drivers` adds OpenVINO runtime drivers needed to run inference on the accelerators. Use, as the base image, public image with OpenVINO backend or the custom one.
+
+```
+docker build -f Dockerfile.drivers --build-arg BASE_IMAGE=tritonserver:latest -t tritonserver:xpu .
+```
+
 
 ## Using the OpenVINO Backend
 
@@ -86,6 +108,7 @@ to skip the dynamic batch sizes in backend.
 * `ENABLE_BATCH_PADDING`: By default an error will be generated if backend receives a request with batch size less than max_batch_size specified in the configuration. This error can be avoided at a cost of performance by specifying `ENABLE_BATCH_PADDING` parameter as `YES`.
 * `RESHAPE_IO_LAYERS`: By setting this parameter as `YES`, the IO layers are reshaped to the dimensions provided in
 model configuration. By default, the dimensions in the model is used.
+* `TARGET_DEVICE`: Choose the OpenVINO device for running the inference. It could be CPU (default), GPU, NPU or any of the virtual devices like AUTO, MULTI, HETERO.
 
 
 ## Auto-Complete Model Configuration
@@ -228,6 +251,55 @@ string_value:"yes"
 }
 }
 ```
+### Running the models on Intel GPU
+
+Add to your config.pbtxt a parameter `TARGET_DEVICE`:
+```
+parameters: [
+{
+   key: "NUM_STREAMS"
+   value: {
+     string_value: "1"
+   }
+},
+{
+   key: "PERFORMANCE_HINT"
+   value: {
+     string_value: "THROUGHPUT"
+   }
+},
+{
+   key: "TARGET_DEVICE"
+   value: {
+     string_value: "GPU"
+   }
+}
+]
+```
+
+Start the container with extra parameter to pass the device `/dev/dri`:
+```
+docker run -it --rm --device /dev/dri --group-add=$(stat -c "%g" /dev/dri/render* | head -n 1 )  tritonserver:xpu
+```
+
+### Running the models on Intel NPU
+
+Add to your config.pbtxt a parameter `TARGET_DEVICE`:
+```
+parameters: [
+{
+   key: "TARGET_DEVICE"
+   value: {
+     string_value: "NPU"
+   }
+}
+]
+```
+
+Start the container with extra parameter to pass the device `/dev/accel`:
+```
+docker run -it --rm --device --device /dev/accel --group-add=$(stat -c "%g" /dev/dri/render* | head -n 1)  tritonserver:xpu
+```
 
 Check also the [Quick deploy guide](https://github.com/triton-inference-server/tutorials/tree/main/Quick_Deploy/OpenVINO).
 
@@ -236,5 +308,7 @@ Examples of the supported models and configs are included in the [functional tes
 ## Known Issues
 
 * Models with the scalar on the input (shape without any dimension are not supported)
+
 * Reshaping using [dimension ranges](https://docs.openvino.ai/2025/openvino-workflow/model-server/ovms_docs_dynamic_shape_dynamic_model.html) is not supported.
+
 * Models without output names are not supported. Models must be saved with names assigned.

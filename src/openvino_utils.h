@@ -97,7 +97,7 @@ TRITONSERVER_Error* CompareDimsSupported(
 
 TRITONSERVER_Error* ReadParameter(
     triton::common::TritonJson::Value& params, const std::string& key,
-    std::string* param);
+    std::string* param, const std::string default_value);
 
 std::vector<int64_t> ConvertToSignedShape(const ov::PartialShape& shape);
 
