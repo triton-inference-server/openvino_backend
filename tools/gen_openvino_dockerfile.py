@@ -135,6 +135,10 @@ RUN (cd lib && \
      done)
 """
 
+    df += """
+CMD ["/bin/bash"]
+"""
+
     with open(FLAGS.output, "w") as dfile:
         dfile.write(df)
 
