@@ -1060,6 +1060,11 @@ ModelInstanceState::ProcessRequests(
     }
   }
 
+  // Reset before every call: prevents a stale value from a previous call (or an
+  // earlier loop iteration) from reaching ValidateOutputBatchSize when the
+  // current batch is full and the write branch is skipped.
+  batch_pad_size_ = 0;
+
   for (size_t i = 0; i < request_count; i++) {
     if (max_batch_size > 0) {
       // Retrieve the batch size from one of the inputs, if the model
