@@ -110,14 +110,15 @@ RUN git clone -b ${OPENVINO_VERSION} https://github.com/openvinotoolkit/openvino
 WORKDIR /workspace/openvino
 RUN git submodule update --init --recursive
 
-WORKDIR /workspace/openvino/build
-RUN /bin/bash -c 'cmake \\
+RUN cmake \\
         -DCMAKE_BUILD_TYPE=${OPENVINO_BUILD_TYPE} \\
         -DCMAKE_INSTALL_PREFIX=/workspace/install \\
         -DENABLE_TESTS=OFF \\
         -DENABLE_VALIDATION_SET=OFF \\
-        .. && \\
-    make -j$(nproc) install'
+        -S /workspace/openvino \\
+        -B /workspace/openvino/build
+
+RUN cmake --build /workspace/openvino/build -j$(nproc) -t install
 
 WORKDIR /opt/openvino
 RUN cp -r /workspace/openvino/licensing LICENSE.openvino
