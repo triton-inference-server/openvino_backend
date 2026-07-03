@@ -123,8 +123,8 @@ RUN cp -r /workspace/openvino/licensing LICENSE.openvino
 RUN mkdir -p include && \\
     cp -r /workspace/install/runtime/include/* include/.
 RUN mkdir -p lib && \\
-    cp -P /workspace/install/runtime/3rdparty/tbb/lib/libtbb.so* lib/. && \\
-    cp -P /workspace/install/runtime/lib/intel64/libopenvino*.so* lib/.
+    find /workspace/install/runtime/3rdparty/tbb/lib/ -type f -name "libtbb.so*" -exec cp -v {} lib/. \\;. && \\
+    find /workspace/install/runtime/lib/ -type f -name "libopenvino*.so*" -exec cp -v {} lib/. \\;.
 """
 
     df += """
