@@ -77,16 +77,15 @@ ENV DEBIAN_FRONTEND=noninteractive
 ENV PIP_BREAK_SYSTEM_PACKAGES=1
 
 RUN apt-get update && apt-get install -y --no-install-recommends \\
-        cmake \\
-        libglib2.0-dev \\
-        git \\
-        make \\
         build-essential \\
-        wget \\
         ca-certificates \\
-        python3-pip
+        cmake \\
+        git \\
+        libglib2.0-dev \\
+        python3-pip \\
+        wget
 
-RUN pip3 install patchelf==0.17.2
+RUN pip3 install patchelf==0.17.2 scons
 
 # Build instructions:
 # https://github.com/openvinotoolkit/openvino/wiki/BuildingForLinux
