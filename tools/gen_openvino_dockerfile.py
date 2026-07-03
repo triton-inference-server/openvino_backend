@@ -76,14 +76,14 @@ RUN apt-get update \\
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PIP_BREAK_SYSTEM_PACKAGES=1
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-        cmake \
-        libglib2.0-dev \
-        git \
-        make \
-        build-essential \
-        wget \
-        ca-certificates \
+RUN apt-get update && apt-get install -y --no-install-recommends \\
+        cmake \\
+        libglib2.0-dev \\
+        git \\
+        make \\
+        build-essential \\
+        wget \\
+        ca-certificates \\
         python3-pip
 
 RUN pip3 install patchelf==0.17.2
@@ -111,27 +111,27 @@ WORKDIR /workspace/openvino
 RUN git submodule update --init --recursive
 
 WORKDIR /workspace/openvino/build
-RUN /bin/bash -c 'cmake \
-        -DCMAKE_BUILD_TYPE=${OPENVINO_BUILD_TYPE} \
-        -DCMAKE_INSTALL_PREFIX=/workspace/install \
-        -DENABLE_TESTS=OFF \
-        -DENABLE_VALIDATION_SET=OFF \
-        .. && \
+RUN /bin/bash -c 'cmake \\
+        -DCMAKE_BUILD_TYPE=${OPENVINO_BUILD_TYPE} \\
+        -DCMAKE_INSTALL_PREFIX=/workspace/install \\
+        -DENABLE_TESTS=OFF \\
+        -DENABLE_VALIDATION_SET=OFF \\
+        .. && \\
     make -j$(nproc) install'
 
 WORKDIR /opt/openvino
 RUN cp -r /workspace/openvino/licensing LICENSE.openvino
-RUN mkdir -p include && \
+RUN mkdir -p include && \\
     cp -r /workspace/install/runtime/include/* include/.
-RUN mkdir -p lib && \
-    cp -P /workspace/install/runtime/3rdparty/tbb/lib/libtbb.so* lib/. && \
+RUN mkdir -p lib && \\
+    cp -P /workspace/install/runtime/3rdparty/tbb/lib/libtbb.so* lib/. && \\
     cp -P /workspace/install/runtime/lib/intel64/libopenvino*.so* lib/.
 """
 
     df += """
-RUN (cd lib && \
-     for i in `find . -mindepth 1 -maxdepth 1 -type f -name '*\.so*'`; do \
-        patchelf --set-rpath '$ORIGIN' $i; \
+RUN (cd lib && \\
+     for i in $(find . -mindepth 1 -maxdepth 1 -type f -name "*.so*"); do \\
+        patchelf --set-rpath '$ORIGIN' $i; \\
      done)
 """
 
