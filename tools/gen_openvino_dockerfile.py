@@ -76,17 +76,16 @@ RUN apt-get update \\
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PIP_BREAK_SYSTEM_PACKAGES=1
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-        cmake \
-        libglib2.0-dev \
-        git \
-        make \
-        build-essential \
-        wget \
-        ca-certificates \
-        python3-pip
+RUN apt-get update && apt-get install -y --no-install-recommends \\
+        build-essential \\
+        ca-certificates \\
+        cmake \\
+        git \\
+        libglib2.0-dev \\
+        python3-pip \\
+        wget
 
-RUN pip3 install patchelf==0.17.2
+RUN pip3 install patchelf==0.17.2 scons
 
 # Build instructions:
 # https://github.com/openvinotoolkit/openvino/wiki/BuildingForLinux
@@ -105,33 +104,33 @@ WORKDIR /workspace
 # are relying on the use of a release branch that does not change once
 # it is released (if a patch is needed for that release we expect
 # there to be a new version).
-RUN git clone -b ${OPENVINO_VERSION} https://github.com/openvinotoolkit/openvino.git
+RUN git clone --recurse-submodules -b ${OPENVINO_VERSION} https://github.com/openvinotoolkit/openvino.git
 
 WORKDIR /workspace/openvino
-RUN git submodule update --init --recursive
 
-WORKDIR /workspace/openvino/build
-RUN /bin/bash -c 'cmake \
-        -DCMAKE_BUILD_TYPE=${OPENVINO_BUILD_TYPE} \
-        -DCMAKE_INSTALL_PREFIX=/workspace/install \
-        -DENABLE_TESTS=OFF \
-        -DENABLE_VALIDATION_SET=OFF \
-        .. && \
-    make -j$(nproc) install'
+RUN cmake \\
+        -DCMAKE_BUILD_TYPE=${OPENVINO_BUILD_TYPE} \\
+        -DCMAKE_INSTALL_PREFIX=/workspace/install \\
+        -DENABLE_TESTS=OFF \\
+        -DENABLE_VALIDATION_SET=OFF \\
+        -S /workspace/openvino \\
+        -B /workspace/openvino/build
+
+RUN cmake --build /workspace/openvino/build -j$(nproc) -t install
 
 WORKDIR /opt/openvino
 RUN cp -r /workspace/openvino/licensing LICENSE.openvino
-RUN mkdir -p include && \
+RUN mkdir -p include && \\
     cp -r /workspace/install/runtime/include/* include/.
-RUN mkdir -p lib && \
-    cp -P /workspace/install/runtime/3rdparty/tbb/lib/libtbb.so* lib/. && \
-    cp -P /workspace/install/runtime/lib/intel64/libopenvino*.so* lib/.
+RUN mkdir -p lib && \\
+    find /workspace/install/runtime/3rdparty/tbb/lib/ -name "libtbb.so*" -exec cp -v {} lib/ \\; && \\
+    find /workspace/install/runtime/lib/ -name "libopenvino*.so*" -exec cp -v {} lib/ \\;
 """
 
     df += """
-RUN (cd lib && \
-     for i in `find . -mindepth 1 -maxdepth 1 -type f -name '*\.so*'`; do \
-        patchelf --set-rpath '$ORIGIN' $i; \
+RUN (cd lib && \\
+     for i in $(find . -mindepth 1 -maxdepth 1 -type f -name "*.so*"); do \\
+        patchelf --set-rpath '$ORIGIN' $i; \\
      done)
 """
 
