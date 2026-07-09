@@ -26,6 +26,7 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 import argparse
+import multiprocessing
 import os
 import platform
 
@@ -34,6 +35,69 @@ def target_platform():
     if FLAGS.target_platform is not None:
         return FLAGS.target_platform
     return platform.system().lower()
+
+
+def usable_cpu_count():
+    # Honor CPU affinity / cgroup pinning where available (Linux); fall back to
+    # the logical core count on platforms without sched_getaffinity.
+    try:
+        return len(os.sched_getaffinity(0))
+    except AttributeError:
+        return multiprocessing.cpu_count() or 1
+
+
+def available_memory_gb():
+    # Best-effort available RAM in GiB, or None if it cannot be determined.
+    # Reads MemAvailable from /proc/meminfo (Linux); returns None elsewhere so
+    # callers fall back to a CPU-only parallelism default.
+    try:
+        with open("/proc/meminfo") as f:
+            for line in f:
+                if line.startswith("MemAvailable:"):
+                    return int(line.split()[1]) / (1024 * 1024)
+    except (OSError, ValueError, IndexError):
+        pass
+    return None
+
+
+# Memory budget the build is assumed to have for compilation. Parallelism is
+# sized so the OpenVINO build's peak memory stays within this, avoiding OOM on
+# swap-less builders (see TRI-1550). Unlike the ONNX Runtime build, the OpenVINO
+# build runs inside a memory-limited container (`docker build --memory`, see
+# TRITON_OPENVINO_DOCKER_MEMORY in CMakeLists.txt) while the generator runs on
+# the host, so this budget is capped at that container limit rather than 64 GB.
+MAX_BUILD_MEMORY_GB = 16.0
+
+# Approximate RAM headroom reserved per concurrent compiler slot.
+MEM_GB_PER_SLOT = 2.0
+
+
+def build_parallelism():
+    # Cap OpenVINO build parallelism to avoid OOM on swap-less builders
+    # (see TRI-1550). Bare `-j$(nproc)` expands to the host core count, which
+    # combined with memory-heavy C++ translation units exhausts memory. Each
+    # concurrent compiler slot is budgeted ~MEM_GB_PER_SLOT of RAM, and the job
+    # count is bounded by that budget.
+    #
+    # The assumed memory budget is capped at MAX_BUILD_MEMORY_GB: we never plan
+    # for more than that (so a big-RAM host doesn't over-subscribe the build
+    # container), nor for more than is actually available (so a small builder
+    # doesn't OOM). When the available memory is unknown, we fall back to the
+    # MAX_BUILD_MEMORY_GB assumption rather than to an unbounded core count.
+    #
+    # Computed at Dockerfile-generation time (same host that runs `docker
+    # build`), matching server/build.py and onnxruntime_backend; the resulting
+    # value is baked into the Dockerfile as a literal so no shell logic runs in
+    # the build stage.
+    cpus = usable_cpu_count()
+
+    mem_gb = available_memory_gb()
+    budget_gb = (
+        min(mem_gb, MAX_BUILD_MEMORY_GB) if mem_gb is not None else MAX_BUILD_MEMORY_GB
+    )
+
+    mem_slots = max(1, int(budget_gb // MEM_GB_PER_SLOT))
+    return max(1, min(cpus, mem_slots))
 
 
 def dockerfile_common():
@@ -70,6 +134,21 @@ RUN apt-get update \\
 """.format(
             os.getenv("CCACHE_REMOTE_STORAGE")
         )
+
+    # Cap OpenVINO build parallelism to avoid OOM on swap-less builders
+    # (see TRI-1550). The value is computed in Python and baked in as a literal
+    # so the build stage stays free of shell logic (portable across Debian/RHEL).
+    ov_jobs = build_parallelism()
+    print(
+        "[INFO] OpenVINO build parallelism: -j{} (usable cores {}, "
+        "MemAvailable {})".format(
+            ov_jobs,
+            usable_cpu_count(),
+            "{:.1f} GB".format(available_memory_gb())
+            if available_memory_gb() is not None
+            else "unknown",
+        )
+    )
 
     df += """
 # Ensure apt-get won't prompt for selecting options
@@ -115,9 +194,17 @@ RUN cmake \\
         -DENABLE_VALIDATION_SET=OFF \\
         -S /workspace/openvino \\
         -B /workspace/openvino/build
+"""
 
-RUN cmake --build /workspace/openvino/build -j$(nproc) -t install
+    # Parallelism is a literal (not `$(nproc)`) so the build container cannot
+    # over-subscribe its RAM; see build_parallelism() and TRI-1550.
+    df += """
+RUN cmake --build /workspace/openvino/build -j{} -t install
+""".format(
+        ov_jobs
+    )
 
+    df += """
 WORKDIR /opt/openvino
 RUN cp -r /workspace/openvino/licensing LICENSE.openvino
 RUN mkdir -p include && \\
