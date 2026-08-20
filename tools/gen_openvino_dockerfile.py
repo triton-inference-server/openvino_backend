@@ -100,6 +100,18 @@ def build_parallelism():
     return max(1, min(cpus, mem_slots))
 
 
+def gpu_plugin_supported():
+    # OpenVINO builds the Intel GPU plugin -- and the bundled OpenCL ICD loader
+    # it links against -- only for x86_64; aarch64 targets have neither, and
+    # their build tree has no bin/intel64 directory at all.
+    #
+    # Resolved from the generator host because the OpenVINO image is built
+    # natively: CMakeLists.txt passes no --platform to `docker build`, so the
+    # host architecture is the target architecture. Same assumption as
+    # build_parallelism(), which sizes the build from host CPU and memory.
+    return platform.machine() == "x86_64"
+
+
 def dockerfile_common():
     df = """
 ARG BASE_IMAGE={}
@@ -147,6 +159,12 @@ RUN apt-get update \\
             "{:.1f} GB".format(available_memory_gb())
             if available_memory_gb() is not None
             else "unknown",
+        )
+    )
+    print(
+        "[INFO] OpenCL ICD loader (libOpenCL.so.1): {} (machine {})".format(
+            "included" if gpu_plugin_supported() else "skipped, no GPU plugin",
+            platform.machine(),
         )
     )
 
@@ -212,6 +230,22 @@ RUN mkdir -p include && \\
 RUN mkdir -p lib && \\
     find /workspace/install/runtime/3rdparty/tbb/lib/ -name "libtbb.so*" -exec cp -v {} lib/ \\; && \\
     find /workspace/install/runtime/lib/ -name "libopenvino*.so*" -exec cp -v {} lib/ \\;
+"""
+
+    # libopenvino_intel_gpu_plugin.so records DT_NEEDED libOpenCL.so.1, but
+    # OpenVINO builds that ICD loader (thirdparty/ocl/icd_loader) into
+    # bin/intel64/<build-type>/ and never stages it under CMAKE_INSTALL_PREFIX,
+    # so the plugin fails to load with "libOpenCL.so.1: cannot open shared
+    # object file". Only the SONAME is needed -- nothing shipped links
+    # -lOpenCL -- so cp -L resolves the versioned symlink into one real file.
+    #
+    # The copy is emitted only where the GPU plugin exists (see
+    # gpu_plugin_supported()). Naming the path explicitly rather than searching
+    # for it is deliberate: cp fails the build if the library ever moves or its
+    # SONAME is bumped, instead of silently shipping an unloadable plugin.
+    if gpu_plugin_supported():
+        df += """
+RUN cp -v -L /workspace/openvino/bin/intel64/${OPENVINO_BUILD_TYPE}/libOpenCL.so.1 lib/
 """
 
     df += """
