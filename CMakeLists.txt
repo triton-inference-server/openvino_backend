@@ -1,4 +1,4 @@
-# Copyright 2021-2025, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# Copyright 2021-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -28,8 +28,8 @@ cmake_minimum_required(VERSION 3.31.8)
 
 project(tritonopenvinobackend LANGUAGES C CXX)
 
-# Use C++17 standard as Triton's minimum required.
-set(TRITON_MIN_CXX_STANDARD 17 CACHE STRING "The minimum C++ standard which features are requested to build this target.")
+# Use C++20 standard as Triton's minimum required.
+set(TRITON_MIN_CXX_STANDARD 20 CACHE STRING "The minimum C++ standard which features are requested to build this target.")
 
 #
 # Set TRITON_BUILD_OPENVINO_VERSION to the version of OpenVINO that
