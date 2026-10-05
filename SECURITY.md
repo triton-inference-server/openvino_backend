@@ -79,7 +79,9 @@ alone.
 **Primary security responsibility:** safely load model artifacts that were
 placed in a Triton model repository, validate tensor shapes and sizes taken from
 inference requests against the model configuration, and execute inference on
-the OpenVINO CPU plugin without corrupting host memory.
+the configured OpenVINO device without corrupting host memory. The device is the
+CPU by default; the `TARGET_DEVICE` parameter can select GPU, NPU or a virtual
+device such as AUTO, MULTI or HETERO.
 
 **Key interfaces and boundaries:**
 
@@ -111,10 +113,14 @@ the OpenVINO CPU plugin without corrupting host memory.
    values can cause resource exhaustion or integer-overflow in size
    calculations.
 3. **Malformed inference requests:** request tensors are copied into
-   OpenVINO input tensors in `ModelInstanceState::ProcessRequests`. A mismatch between the declared
-   shape and the byte size supplied by the client could cause an out-of-bounds
-   read or write. The backend compares the expected and received byte sizes
-   before use; this check is the main control.
+   OpenVINO input tensors by `ModelInstanceState::SetInputTensors`, which
+   `ProcessRequests` calls. A mismatch between the declared shape and the byte
+   size supplied by the client could cause an out-of-bounds read or write. On
+   the default path the backend compares the expected and received byte sizes
+   and returns an error on a mismatch. When `ENABLE_BATCH_PADDING` is set, the
+   padded path only logs a verbose message about a size difference and copies
+   into a buffer sized to the input tensor, so operators should not rely on the
+   size check for padded requests.
 4. **Denial of service through inference load:** large or dynamically shaped
    batches, unbounded request concurrency and expensive models can exhaust CPU
    and memory on the host shared with other models.
@@ -131,11 +137,15 @@ the OpenVINO CPU plugin without corrupting host memory.
 - **Model repository is trusted.** The backend does not sandbox or verify model
   files. Operators must restrict write access to the repository and obtain
   models only from trusted sources.
-- **The Triton server provides authentication, authorization and TLS.** This
-  backend implements none of them and assumes requests have been authenticated
-  and rate-limited before they arrive.
+- **The deployer provides authentication, authorization, TLS and rate
+  limiting.** This backend implements none of them, and Triton does not
+  provide user identity or per-user authorization itself. Operators must
+  configure the applicable server or gateway controls before requests reach the
+  backend.
 - **The OpenVINO runtime is trusted and kept up to date.** Model parsing is
   delegated to it; vulnerabilities in OpenVINO are inherited by this backend.
+  When `TARGET_DEVICE` selects GPU or NPU, the corresponding device plugins and
+  drivers are part of the trusted runtime.
 - **Shape and size validation depends on a correct model configuration.**
   Operators must keep `config.pbtxt` consistent with the deployed model.
 - **The server process runs with least privilege** and with resource limits
