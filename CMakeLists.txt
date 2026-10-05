@@ -35,18 +35,12 @@ set(TRITON_MIN_CXX_STANDARD 20 CACHE STRING "The minimum C++ standard which feat
 # Set TRITON_BUILD_OPENVINO_VERSION to the version of OpenVINO that
 # you want to be built for the backend.
 #
-# Set TRITON_BUILD_CONTAINER to the Triton container to use as a base
-# for the build. Required on Windows. Required on Linux unless
-# TRITON_BUILD_CONTAINER_VERSION is set.
-#
-# On linux, in place of TRITON_BUILD_CONTAINER, you can set
-# TRITON_BUILD_CONTAINER_VERSION to the Triton version that you want
-# to target with the build and the corresponding container from NGC
-# will be used.
+# Set TRITON_BUILD_CONTAINER to the container to use as a base for the
+# build. Required on all platforms: the image is never inferred here, so
+# that whoever drives the build decides it.
 #
 option(TRITON_ENABLE_STATS "Include statistics collections in backend" ON)
-set(TRITON_BUILD_CONTAINER "" CACHE STRING "Triton container to use a base for build")
-set(TRITON_BUILD_CONTAINER_VERSION "" CACHE STRING "Triton container version to target")
+set(TRITON_BUILD_CONTAINER "" CACHE STRING "Container to use as a base for build")
 set(TRITON_BUILD_OPENVINO_VERSION "" CACHE STRING "OpenVINO version to build")
 
 set(TRITON_REPO_ORGANIZATION "https://github.com/triton-inference-server" CACHE STRING "Git repository to pull from")
@@ -64,17 +58,8 @@ if(NOT TRITON_BUILD_OPENVINO_VERSION)
   message(FATAL_ERROR "TRITON_BUILD_OPENVINO_VERSION is required")
 endif()
 
-if(WIN32 AND NOT TRITON_BUILD_CONTAINER)
-  message(FATAL_ERROR "TRITON_BUILD_CONTAINER is required")
-endif()
-
-if(NOT TRITON_BUILD_CONTAINER AND NOT TRITON_BUILD_CONTAINER_VERSION)
-  message(FATAL_ERROR
-    "TRITON_BUILD_CONTAINER or TRITON_BUILD_CONTAINER_VERSION is required")
-endif()
-
 if(NOT TRITON_BUILD_CONTAINER)
-  set(TRITON_BUILD_CONTAINER "nvcr.io/nvidia/tritonserver:${TRITON_BUILD_CONTAINER_VERSION}-py3-min")
+  message(FATAL_ERROR "TRITON_BUILD_CONTAINER is required")
 endif()
 
 set(TRITON_OPENVINO_INCLUDE_PATHS "${CMAKE_CURRENT_BINARY_DIR}/openvino/include")

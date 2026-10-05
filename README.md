@@ -1,5 +1,5 @@
 <!--
-# Copyright 2021-2022, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# Copyright 2021-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -57,7 +57,7 @@ Follow the steps below to build the backend shared library.
 ```
 $ mkdir build
 $ cd build
-$ cmake -DCMAKE_INSTALL_PREFIX:PATH=`pwd`/install -DTRITON_BUILD_OPENVINO_VERSION=2025.4.0 -DTRITON_BUILD_CONTAINER_VERSION=25.11  ..
+$ cmake -DCMAKE_INSTALL_PREFIX:PATH=`pwd`/install -DTRITON_BUILD_OPENVINO_VERSION=2025.4.0 -DTRITON_BUILD_CONTAINER=nvcr.io/nvidia/cuda-dl-base:26.09-cuda13.4-devel-ubuntu24.04  ..
 $ make install
 ```
 The compiled backend will be added to `build/install/backends/openvino` folder.
