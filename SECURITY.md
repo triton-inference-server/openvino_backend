@@ -37,7 +37,7 @@ Report it through one of the following channels:
    <https://www.nvidia.com/en-us/security/>
 2. **Email:** [psirt@nvidia.com](mailto:psirt@nvidia.com). Please encrypt the
    report with the [NVIDIA PGP key](https://www.nvidia.com/en-us/security/pgp-key).
-3. **GitHub Private Vulnerability Reporting:** use the "Report a vulnerability"
+3. **GitHub Private Vulnerability Reporting (where enabled):** use the "Report a vulnerability"
    button on the Security tab of this repository.
 
 **OEM partners should contact their NVIDIA Customer Program Manager.**
@@ -111,7 +111,7 @@ the OpenVINO CPU plugin without corrupting host memory.
    values can cause resource exhaustion or integer-overflow in size
    calculations.
 3. **Malformed inference requests:** request tensors are copied into
-   OpenVINO input tensors in `ProcessInputs`. A mismatch between the declared
+   OpenVINO input tensors in `ModelInstanceState::ProcessRequests`. A mismatch between the declared
    shape and the byte size supplied by the client could cause an out-of-bounds
    read or write. The backend compares the expected and received byte sizes
    before use; this check is the main control.
