@@ -24,6 +24,9 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+# Vendored third-party files keep their upstream license and formatting.
+exclude: ^(cmake/conan/conan_provider\.cmake|cmake/conan/LICENSE|conan/openvino/)
+
 repos:
 - repo: https://github.com/NVIDIA/security-workflows
   rev: v0.3.0

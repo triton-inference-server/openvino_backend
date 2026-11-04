@@ -52,12 +52,13 @@ $ apt-get install rapidjson-dev python3-dev python3-pip
 $ pip3 install patchelf==0.17.2
 ```
 
-Follow the steps below to build the backend shared library.
+Follow the steps below to build the backend shared library with OpenVINO
+built in Docker. On Linux the default is the Conan build described below.
 
 ```
 $ mkdir build
 $ cd build
-$ cmake -DCMAKE_INSTALL_PREFIX:PATH=`pwd`/install -DTRITON_BUILD_OPENVINO_VERSION=2025.4.0 -DTRITON_BUILD_CONTAINER=nvcr.io/nvidia/cuda-dl-base:26.09-cuda13.4-devel-ubuntu24.04  ..
+$ cmake -DCMAKE_INSTALL_PREFIX:PATH=`pwd`/install -DTRITON_OPENVINO_USE_CONAN=OFF -DTRITON_BUILD_OPENVINO_VERSION=2025.4.0 -DTRITON_BUILD_CONTAINER=nvcr.io/nvidia/cuda-dl-base:26.09-cuda13.4-devel-ubuntu24.04  ..
 $ make install
 ```
 The compiled backend will be added to `build/install/backends/openvino` folder.
@@ -69,6 +70,51 @@ but the listed CMake argument can be used to override.
 * triton-inference-server/backend: -DTRITON_BACKEND_REPO_TAG=[tag]
 * triton-inference-server/core: -DTRITON_CORE_REPO_TAG=[tag]
 * triton-inference-server/common: -DTRITON_COMMON_REPO_TAG=[tag]
+
+## Build the OpenVINO Backend with Conan (Linux, no Docker)
+
+OpenVINO and the other third-party dependencies can come from
+[Conan](https://conan.io) 2.x instead of the Docker build above. Conan runs
+during the CMake configure step, through CMake's dependency provider.
+
+`TRITON_OPENVINO_USE_CONAN` is `ON` by default on Linux, so `conan` must be on
+`PATH`. Configure with `-DTRITON_OPENVINO_USE_CONAN=OFF` (and
+`-DTRITON_BUILD_CONTAINER=<image>`) to build OpenVINO in Docker instead.
+
+```
+cmake -S . -B build
+cmake --build build -j
+cmake --install build
+```
+
+`TRITON_BUILD_OPENVINO_VERSION` defaults to 2026.4.1 in this mode.
+
+The OpenVINO recipe is kept in `conan/openvino` and exported automatically.
+Building OpenVINO from source is slow and memory hungry; see
+`conan/profiles/linux-release` for the job limit. `patchelf` is required for
+the install step.
+
+Packages Conan owns (`OpenVINO`, `RapidJSON`, `Protobuf`, `gRPC`, `TBB`, see
+`TRITON_CONAN_STRICT_PACKAGES`) are never taken from the system: while they are
+looked up, the system search paths and package registries are disabled (the
+equivalent of `NO_DEFAULT_PATH`, which already covers `NO_CMAKE_SYSTEM_PATH`),
+and a result outside the Conan output folder fails the configure step. Pass
+`-DTRITON_CONAN_ALLOW_SYSTEM_PACKAGES=ON` to allow the fallback.
+
+To reuse binaries between machines, export `CONAN_REMOTE_URL` before
+configuring, with the credentials in the URL
+(`https://<user>:<token>@artifactory.example.com/artifactory/api/conan/<repo>`;
+percent-encode `@`, `:` or `/` in the token). For local use the credentials may
+instead come from `ARTIFACTORY_USER`/`ARTIFACTORY_TOKEN`. The remote is used automatically when the variable is set;
+otherwise only the remotes already known to Conan (Conan Center) are used. Credentials are never written to Conan's configuration. After a
+build, only the packages that were built from source (not restored from a
+cache or remote) are pushed with:
+
+```
+cmake --build build --target conan-upload
+```
+
+Add `-DTRITON_CONAN_UPLOAD_DRY_RUN=ON` to report without uploading.
 
 ## Build a complete triton custom image with OpenVINO backend
 

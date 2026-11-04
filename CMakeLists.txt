@@ -26,7 +26,33 @@
 
 cmake_minimum_required(VERSION 3.31.8)
 
+#
+# Choose where OpenVINO comes from. This must happen before project(): the
+# Conan dependency provider can only be installed through
+# CMAKE_PROJECT_TOP_LEVEL_INCLUDES, which project() consumes.
+#
+# TRITON_OPENVINO_USE_CONAN (default ON on Linux, the only platform the Conan
+# build supports) gets OpenVINO from Conan. Set it OFF to build OpenVINO in
+# Docker instead, which requires TRITON_BUILD_CONTAINER.
+#
+if(CMAKE_HOST_SYSTEM_NAME STREQUAL "Linux")
+  set(_triton_openvino_use_conan_default ON)
+else()
+  set(_triton_openvino_use_conan_default OFF)
+endif()
+option(TRITON_OPENVINO_USE_CONAN "Get OpenVINO from Conan instead of Docker"
+       ${_triton_openvino_use_conan_default})
+if(TRITON_OPENVINO_USE_CONAN)
+  if(NOT TRITON_BUILD_OPENVINO_VERSION)
+    # Keep in sync with conanfile.txt and conan/openvino/conandata.yml.
+    set(TRITON_BUILD_OPENVINO_VERSION "2026.4.1")
+  endif()
+  list(APPEND CMAKE_PROJECT_TOP_LEVEL_INCLUDES
+       "${CMAKE_CURRENT_LIST_DIR}/cmake/conan_bootstrap.cmake")
+endif()
+
 project(tritonopenvinobackend LANGUAGES C CXX)
+message(STATUS "TRITON_OPENVINO_USE_CONAN=${TRITON_OPENVINO_USE_CONAN}")
 
 # Use C++20 standard as Triton's minimum required.
 set(TRITON_MIN_CXX_STANDARD 20 CACHE STRING "The minimum C++ standard which features are requested to build this target.")
@@ -38,6 +64,11 @@ set(TRITON_MIN_CXX_STANDARD 20 CACHE STRING "The minimum C++ standard which feat
 # Set TRITON_BUILD_CONTAINER to the container to use as a base for the
 # build. Required on all platforms: the image is never inferred here, so
 # that whoever drives the build decides it.
+#
+# TRITON_OPENVINO_USE_CONAN (see the top of this file) selects
+# Conan instead of Docker for OpenVINO and the other third-party dependencies.
+# Conan runs during configure through the CMake dependency provider, see
+# cmake/conan_bootstrap.cmake. TRITON_BUILD_CONTAINER is not used in that mode.
 #
 option(TRITON_ENABLE_STATS "Include statistics collections in backend" ON)
 set(TRITON_BUILD_CONTAINER "" CACHE STRING "Container to use as a base for build")
@@ -58,8 +89,12 @@ if(NOT TRITON_BUILD_OPENVINO_VERSION)
   message(FATAL_ERROR "TRITON_BUILD_OPENVINO_VERSION is required")
 endif()
 
-if(NOT TRITON_BUILD_CONTAINER)
+if(NOT TRITON_OPENVINO_USE_CONAN AND NOT TRITON_BUILD_CONTAINER)
   message(FATAL_ERROR "TRITON_BUILD_CONTAINER is required")
+endif()
+
+if(TRITON_OPENVINO_USE_CONAN AND NOT CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  message(FATAL_ERROR "TRITON_OPENVINO_USE_CONAN is supported on Linux only")
 endif()
 
 set(TRITON_OPENVINO_INCLUDE_PATHS "${CMAKE_CURRENT_BINARY_DIR}/openvino/include")
@@ -71,6 +106,19 @@ if (WIN32)
 else()
   set(OPENVINO_LIBRARY "openvino.so")
 endif() # WIN32
+
+#
+# Conan-provided dependencies
+#
+if(TRITON_OPENVINO_USE_CONAN)
+  find_package(OpenVINO CONFIG REQUIRED)
+  find_package(RapidJSON CONFIG REQUIRED)
+  # common/ reads RAPIDJSON_INCLUDE_DIRS; Conan's CMakeDeps names it
+  # RapidJSON_INCLUDE_DIRS.
+  if(NOT RAPIDJSON_INCLUDE_DIRS)
+    set(RAPIDJSON_INCLUDE_DIRS "${RapidJSON_INCLUDE_DIRS}")
+  endif()
+endif()
 
 #
 # Dependencies
@@ -120,8 +168,14 @@ target_include_directories(
   triton-openvino-backend
   PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
-    ${TRITON_OPENVINO_INCLUDE_PATHS}
 )
+if(NOT TRITON_OPENVINO_USE_CONAN)
+  target_include_directories(
+    triton-openvino-backend
+    PRIVATE
+      ${TRITON_OPENVINO_INCLUDE_PATHS}
+  )
+endif()
 
 target_compile_features(triton-openvino-backend PRIVATE cxx_std_${TRITON_MIN_CXX_STANDARD})
 target_compile_options(
@@ -151,13 +205,6 @@ if(NOT WIN32)
   )
 endif() # NOT WIN32
 
-FOREACH(p ${TRITON_OPENVINO_LIB_PATHS})
-  target_link_directories(
-    triton-openvino-backend
-    PRIVATE ${p}
-  )
-ENDFOREACH(p)
-
 target_link_libraries(
   triton-openvino-backend
   PRIVATE
@@ -165,13 +212,35 @@ target_link_libraries(
     triton-core-backendapi  # from repo-core
     triton-core-serverstub  # from repo-core
     triton-backend-utils    # from repo-backend
-    ${OPENVINO_LIBRARY}
 )
+
+if(TRITON_OPENVINO_USE_CONAN)
+  target_link_libraries(
+    triton-openvino-backend
+    PRIVATE
+      openvino::runtime     # from Conan
+  )
+else()
+  FOREACH(p ${TRITON_OPENVINO_LIB_PATHS})
+    target_link_directories(
+      triton-openvino-backend
+      PRIVATE ${p}
+    )
+  ENDFOREACH(p)
+
+  target_link_libraries(
+    triton-openvino-backend
+    PRIVATE
+      ${OPENVINO_LIBRARY}
+  )
+endif() # TRITON_OPENVINO_USE_CONAN
 
 #
 # Build the OpenVINO libraries using docker.
 #
-if (WIN32)
+if(TRITON_OPENVINO_USE_CONAN)
+  # OpenVINO comes from Conan; nothing to build here.
+elseif (WIN32)
   add_custom_command(
     OUTPUT
       openvino/lib/${OPENVINO_LIBRARY}
@@ -199,15 +268,17 @@ else()
   )
 endif() # WIN32
 
-add_custom_target(ov_target DEPENDS openvino/lib/${OPENVINO_LIBRARY})
-add_library(openvino-library SHARED IMPORTED GLOBAL)
-add_dependencies(openvino-library ov_target)
-add_dependencies(triton-openvino-backend openvino-library)
-set_target_properties(
-  openvino-library
-  PROPERTIES
-    IMPORTED_LOCATION openvino/lib/${OPENVINO_LIBRARY}
-)
+if(NOT TRITON_OPENVINO_USE_CONAN)
+  add_custom_target(ov_target DEPENDS openvino/lib/${OPENVINO_LIBRARY})
+  add_library(openvino-library SHARED IMPORTED GLOBAL)
+  add_dependencies(openvino-library ov_target)
+  add_dependencies(triton-openvino-backend openvino-library)
+  set_target_properties(
+    openvino-library
+    PROPERTIES
+      IMPORTED_LOCATION openvino/lib/${OPENVINO_LIBRARY}
+  )
+endif() # NOT TRITON_OPENVINO_USE_CONAN
 
 #
 # Install
@@ -215,14 +286,16 @@ set_target_properties(
 include(GNUInstallDirs)
 set(INSTALL_CONFIGDIR ${CMAKE_INSTALL_LIBDIR}/cmake/TritonOpenVINOBackend)
 
-install(
-  DIRECTORY
-    ${CMAKE_CURRENT_BINARY_DIR}/openvino/
-  DESTINATION ${CMAKE_INSTALL_PREFIX}/backends/openvino
-  PATTERN *lib EXCLUDE
-  PATTERN *bin EXCLUDE
-  PATTERN *include EXCLUDE
-)
+if(NOT TRITON_OPENVINO_USE_CONAN)
+  install(
+    DIRECTORY
+      ${CMAKE_CURRENT_BINARY_DIR}/openvino/
+    DESTINATION ${CMAKE_INSTALL_PREFIX}/backends/openvino
+    PATTERN *lib EXCLUDE
+    PATTERN *bin EXCLUDE
+    PATTERN *include EXCLUDE
+  )
+endif()
 
 if (NOT WIN32)
   install(
@@ -233,12 +306,46 @@ if (NOT WIN32)
     LIBRARY DESTINATION ${CMAKE_INSTALL_PREFIX}/backends/openvino
   )
 
-  install(
-    DIRECTORY
-      ${CMAKE_CURRENT_BINARY_DIR}/openvino/lib/
-    USE_SOURCE_PERMISSIONS
-    DESTINATION ${CMAKE_INSTALL_PREFIX}/backends/openvino
-  )
+  if(TRITON_OPENVINO_USE_CONAN)
+    # The Conan install step deploys every dependency package under
+    # conan-deploy/ (see cmake/conan_bootstrap.cmake). Ship the OpenVINO
+    # runtime, its plugins and oneTBB next to the backend, as the Docker flow
+    # does, and point their RUNPATH at $ORIGIN so they find each other.
+    file(
+      GLOB_RECURSE TRITON_OPENVINO_RUNTIME_LIBS
+      "${CMAKE_BINARY_DIR}/conan-deploy/full_deploy/host/openvino/*/lib/lib*.so*"
+      "${CMAKE_BINARY_DIR}/conan-deploy/full_deploy/host/onetbb/*/lib/libtbb*.so*"
+    )
+    if(NOT TRITON_OPENVINO_RUNTIME_LIBS)
+      message(FATAL_ERROR
+        "No OpenVINO runtime libraries found under "
+        "${CMAKE_BINARY_DIR}/conan-deploy; the Conan deployer output layout "
+        "may have changed")
+    endif()
+    install(
+      FILES ${TRITON_OPENVINO_RUNTIME_LIBS}
+      DESTINATION ${CMAKE_INSTALL_PREFIX}/backends/openvino
+    )
+    find_program(PATCHELF_EXECUTABLE patchelf REQUIRED)
+    install(CODE "set(TRITON_PATCHELF \"${PATCHELF_EXECUTABLE}\")")
+    install(CODE "set(TRITON_BACKEND_DIR \"${CMAKE_INSTALL_PREFIX}/backends/openvino\")")
+    install(CODE [[
+      file(GLOB _libs "$ENV{DESTDIR}${TRITON_BACKEND_DIR}/*.so*")
+      foreach(_lib ${_libs})
+        execute_process(
+          COMMAND ${TRITON_PATCHELF} --set-rpath "$ORIGIN" ${_lib}
+          COMMAND_ERROR_IS_FATAL ANY
+        )
+      endforeach()
+    ]])
+  else()
+    install(
+      DIRECTORY
+        ${CMAKE_CURRENT_BINARY_DIR}/openvino/lib/
+      USE_SOURCE_PERMISSIONS
+      DESTINATION ${CMAKE_INSTALL_PREFIX}/backends/openvino
+    )
+  endif() # TRITON_OPENVINO_USE_CONAN
 else()
   install(
     TARGETS
@@ -290,3 +397,30 @@ export(
 )
 
 export(PACKAGE TritonOpenVINOBackend)
+
+#
+# Push the Conan packages that were built from source during configure.
+# Opt in with: cmake --build build --target conan-upload
+# Needs CONAN_REMOTE_URL in the environment (see cmake/conan_bootstrap.cmake);
+# packages restored from a cache or a remote are never uploaded.
+#
+if(TRITON_OPENVINO_USE_CONAN)
+  set(TRITON_CONAN_UPLOAD_REMOTE "" CACHE STRING
+      "Conan remote for the conan-upload target (default: CONAN_REMOTE_URL)")
+  option(TRITON_CONAN_UPLOAD_DRY_RUN "Do not upload, only report" OFF)
+  set(_triton_conan_upload_args --graph "${TRITON_CONAN_GRAPH_FILE}")
+  if(TRITON_CONAN_UPLOAD_REMOTE)
+    list(APPEND _triton_conan_upload_args --remote "${TRITON_CONAN_UPLOAD_REMOTE}")
+  endif()
+  if(TRITON_CONAN_UPLOAD_DRY_RUN)
+    list(APPEND _triton_conan_upload_args --dry-run)
+  endif()
+  add_custom_target(
+    conan-upload
+    COMMAND ${CMAKE_COMMAND} -E env
+            "TRITON_CONAN_EXECUTABLE=${_triton_conan_real}"
+            "${TRITON_CONAN_WRAPPER}" triton-upload ${_triton_conan_upload_args}
+    COMMENT "Uploading Conan packages built from source"
+    VERBATIM
+  )
+endif()

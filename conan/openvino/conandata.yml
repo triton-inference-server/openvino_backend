@@ -1,0 +1,23 @@
+sources:
+  "2026.4.1":
+    "openvino":
+      url: "https://github.com/openvinotoolkit/openvino/archive/refs/tags/2026.4.1.tar.gz"
+      sha256: "1ee85264556025486a4745a2d452ea823c578b3d162768bfef590366d2e6c539"
+    "arm_compute":
+      url: "https://github.com/ARM-software/ComputeLibrary/archive/refs/tags/v53.1.0.tar.gz"
+      sha256: "9aa17bfbda0ab68904cdb005fc724498d630b64fdaadb4a50e4d7eee67680a76"
+    "arm_kleidiai":
+      url: "https://github.com/ARM-software/kleidiai/archive/refs/tags/v1.26.0.tar.gz"
+      sha256: "c4ed713df2e5ebb412bab98fec9ec5ee001c52e8cfdcc6b091e5e1de9c750588"
+    "onednn_cpu":
+      url: "https://github.com/openvinotoolkit/oneDNN/archive/1289c3b65dd6a119a5ed12a816517d9c3a21d81b.tar.gz"
+      sha256: "726a93992e65152f338fa7bce536fa9ed6c9f395de80d1e55f01ecc3fece7f11"
+    "mlas":
+      url: "https://github.com/openvinotoolkit/mlas/archive/d1bc25ec4660cddd87804fcf03b2411b5dfb2e94.tar.gz"
+      sha256: "0a44fbfd4b13e8609d66ddac4b11a27c90c1074cde5244c91ad197901666004c"
+    "onednn_gpu":
+      url: "https://github.com/oneapi-src/oneDNN/archive/a3d459721b72c3a9d2685b46c03dafee7af0f25c.tar.gz"
+      sha256: "cf6b29b5b41c8f2de1a05c3dd0013c4ee773724b0d20d6fa7dbb9b332e698180"
+patches:
+  "2026.4.1":
+    - patch_file: "patches/2026.4.1-fix-deps.patch"
