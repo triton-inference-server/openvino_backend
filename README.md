@@ -102,6 +102,7 @@ Configuration of OpenVINO for a model is done through the Parameters section of 
 * `INFERENCE_NUM_THREADS`: Maximum number of threads that can be used for inference tasks. Should be a non-negative number. Default is equal to number of cores.
 * `COMPILATION_NUM_THREADS`: Maximum number of threads that can be used for compilation tasks. Should be a non-negative number.
 * `HINT_BF16`: Hint for device to use bfloat16 precision for inference. Possible value is `YES`.
+* `INFERENCE_PRECISION_HINT`: Sets the precision used for inference (`ov::hint::inference_precision`). Accepted values are `F32` (or `FP32`), `BF16` and `F16` (or `FP16`), case-insensitive. Without this parameter OpenVINO uses the device default, which on CPUs with native bfloat16 support (for example AVX512_BF16 or AMX) is bfloat16, so results can differ from the same model on other CPUs. Set `F32` to keep full-precision results on such CPUs. This parameter supersedes `HINT_BF16` (`BF16` here is equivalent to `HINT_BF16: YES`); do not set both.
 * `NUM_STREAMS`: The number of executor logical partitions. Set the value to `AUTO` to creates bare minimum of streams to improve the performance, or set the value to `NUMA` to creates as many streams as needed to accommodate NUMA and avoid associated penalties. Set a numerical value to set explicit number of streams.
 * `SKIP_OV_DYNAMIC_BATCHSIZE`: The topology of some models do not support openVINO dynamic batch sizes. Set the value of this parameter to `YES`, in order
 to skip the dynamic batch sizes in backend.
