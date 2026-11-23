@@ -267,6 +267,8 @@ ModelState::ParseParameters(const std::string& device)
     RETURN_IF_ERROR(
         ParseParameter("COMPILATION_NUM_THREADS", params, &device_config));
     RETURN_IF_ERROR(ParseParameter("HINT_BF16", params, &device_config));
+    RETURN_IF_ERROR(
+        ParseParameter("INFERENCE_PRECISION_HINT", params, &device_config));
     RETURN_IF_ERROR(ParseParameter("NUM_STREAMS", params, &device_config));
     RETURN_IF_ERROR(ParseParameter("PERFORMANCE_HINT", params, &device_config));
   }
@@ -377,6 +379,20 @@ ModelState::ParseParameterHelper(
           TRITONSERVER_ERROR_INVALID_ARG,
           (std::string("expected the parameter '") + mkey +
            "' to be YES, got " + *value)
+              .c_str());
+    }
+  } else if (mkey.compare("INFERENCE_PRECISION_HINT") == 0) {
+    if (value->compare("f32") == 0 || value->compare("fp32") == 0) {
+      *ov_property = ov::hint::inference_precision(ov::element::f32);
+    } else if (value->compare("bf16") == 0) {
+      *ov_property = ov::hint::inference_precision(ov::element::bf16);
+    } else if (value->compare("f16") == 0 || value->compare("fp16") == 0) {
+      *ov_property = ov::hint::inference_precision(ov::element::f16);
+    } else {
+      return TRITONSERVER_ErrorNew(
+          TRITONSERVER_ERROR_INVALID_ARG,
+          (std::string("expected the parameter '") + mkey +
+           "' to be F32/BF16/F16, got " + *value)
               .c_str());
     }
   } else if (mkey.compare("NUM_STREAMS") == 0) {
