@@ -204,7 +204,22 @@ WORKDIR /workspace
 RUN git clone --recurse-submodules -b ${OPENVINO_VERSION} https://github.com/openvinotoolkit/openvino.git
 
 WORKDIR /workspace/openvino
+"""
 
+    # GCC 15 replaced the numeric values of --param=aarch64-autovec-preference
+    # with names, but OpenVINO still passes "=1" (asimd-only) to GCC < 16 when
+    # compiling its cross-compiled SVE kernels, so the build fails with
+    # "unknown autovec preference '1'" (e.g. Ubuntu 26.04). Rewrite it to the
+    # equivalent name; a no-op for older GCC or once OpenVINO fixes it.
+    if platform.machine() == "aarch64":
+        df += """
+RUN if [ "$(gcc -dumpversion | cut -d. -f1)" -ge 15 ]; then \\
+      sed -i 's/--param=aarch64-autovec-preference=1)/--param=aarch64-autovec-preference=asimd-only)/' \\
+        cmake/developer_package/compile_flags/functions.cmake; \\
+    fi
+"""
+
+    df += """
 RUN cmake \\
         -DCMAKE_BUILD_TYPE=${OPENVINO_BUILD_TYPE} \\
         -DCMAKE_INSTALL_PREFIX=/workspace/install \\
